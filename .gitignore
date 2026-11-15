@@ -5,7 +5,7 @@
 **/obj/
 **/node_modules/
 **/dist/
-media/
+/media/
 .tools/
 .ezcooking.lock
 .vs/
