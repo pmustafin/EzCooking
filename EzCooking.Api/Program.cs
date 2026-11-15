@@ -34,9 +34,11 @@ builder.Services.AddSingleton<IRecipeStore, RecipeStore>();
 builder.Services.AddSingleton<IRecipeSubmissionService, RecipeSubmissionService>();
 builder.Services.AddSingleton<ProcessingActivity>();
 builder.Services.AddSingleton<LocalTranslation>();
+builder.Services.AddSingleton<RussianTranslationService>();
 builder.Services.AddSingleton(new AppPaths(root));
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<RecipeWorker>();
+builder.Services.AddHostedService<RussianTranslationWorker>();
 builder.Services.AddSingleton<IHostedService>(services => new TelegramWorker(
     services.GetRequiredService<NpgsqlDataSource>(), services.GetRequiredService<IRecipeSubmissionService>(),
     services.GetRequiredService<ILogger<TelegramWorker>>()));

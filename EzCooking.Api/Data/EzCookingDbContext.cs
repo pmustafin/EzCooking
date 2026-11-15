@@ -7,6 +7,7 @@ public sealed class EzCookingDbContext(DbContextOptions<EzCookingDbContext> opti
     public DbSet<RecipeEntity> Recipes => Set<RecipeEntity>();
     public DbSet<TelegramBotState> TelegramBotStates => Set<TelegramBotState>();
     public DbSet<TelegramSubmission> TelegramSubmissions => Set<TelegramSubmission>();
+    public DbSet<RecipeTranslation> RecipeTranslations => Set<RecipeTranslation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,6 +24,16 @@ public sealed class EzCookingDbContext(DbContextOptions<EzCookingDbContext> opti
         recipe.Property(x => x.AudioConsent).HasColumnName("audio_consent");
         recipe.Property(x => x.Dismissed).HasColumnName("dismissed");
         recipe.Property(x => x.UploadSha256).HasColumnName("upload_sha256");
+
+        var translation = modelBuilder.Entity<RecipeTranslation>();
+        translation.ToTable("recipe_translations");
+        translation.HasKey(x => x.RecipeId);
+        translation.Property(x => x.RecipeId).HasColumnName("recipe_id").ValueGeneratedNever();
+        translation.Property(x => x.RecipeVersion).HasColumnName("recipe_version");
+        translation.Property(x => x.Status).HasColumnName("status");
+        translation.Property(x => x.Document).HasColumnName("document").HasColumnType("jsonb");
+        translation.Property(x => x.Error).HasColumnName("error");
+        translation.Property(x => x.UpdatedAt).HasColumnName("updated_at");
 
         var state = modelBuilder.Entity<TelegramBotState>();
         state.ToTable("telegram_bot_state");

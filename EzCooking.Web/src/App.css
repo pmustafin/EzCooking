@@ -142,3 +142,12 @@ footer { color:var(--muted); padding:0 6% 32px; font-size:.875rem; }
   .tile-copy strong { font-size:1rem; }.job-head { flex-direction:column; }.capture { padding:24px; }
   .ingredient-fields { grid-template-columns:1fr; gap:0; }
 }
+.translation { margin-top:16px; max-width:52ch; }
+.language-control { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.language-control button { border:0!important; border-radius:0!important; background:white!important; color:var(--green)!important; min-height:44px; padding:8px 14px!important; }
+.language-control button[aria-pressed=true] { background:var(--green)!important; color:white!important; }
+.language-control button:focus-visible { outline-offset:-3px; }
+.translation-status { margin:8px 0 0; color:var(--muted); font-size:.875rem; line-height:1.45; }
+.translation-confirm,.translation-message { margin-top:12px; padding:14px 16px; background:var(--cds-layer-01); border-left:3px solid var(--green); line-height:1.5; font-size:.9375rem; overflow-wrap:anywhere; }
+.translation-message { border-color:#a64c27; }
+.translation-confirm p,.translation-message p { margin:0 0 10px; }

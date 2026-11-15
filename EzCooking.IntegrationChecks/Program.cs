@@ -164,6 +164,82 @@ await using (var context = new EzCookingDbContext(efOptions))
 }
 Console.WriteLine("EF Core mapping and transaction checks passed.");
 
+var translationService = new RussianTranslationService(db);
+var fakeOpenRouter = new FakeOpenRouter();
+var translationWorker = new RussianTranslationWorker(db, fakeOpenRouter, NullLogger<RussianTranslationWorker>.Instance);
+var previousKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+var previousModel = Environment.GetEnvironmentVariable("OPENROUTER_TRANSLATION_MODEL");
+var previousProvider = Environment.GetEnvironmentVariable("OPENROUTER_TRANSLATION_PROVIDER");
+Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", "synthetic-test-key");
+Environment.SetEnvironmentVariable("OPENROUTER_TRANSLATION_MODEL", "test/model:free");
+Environment.SetEnvironmentVariable("OPENROUTER_TRANSLATION_PROVIDER", null);
+try
+{
+    var translationRecipe = await store.Create(null, false, CancellationToken.None);
+    await store.SetStatus(translationRecipe.Id, "processing", null, CancellationToken.None);
+    await store.Complete(translationRecipe.Id, JsonSerializer.Serialize(translationSource, new JsonSerializerOptions(JsonSerializerDefaults.Web)), CancellationToken.None);
+    Check(await translationService.Get(translationRecipe.Id, CancellationToken.None) is null && fakeOpenRouter.Requests == 0,
+        "Translation was requested without consent.");
+    Check(!await translationService.Queue(translationRecipe.Id, 0, CancellationToken.None), "A stale version was queued.");
+    var queued = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => translationService.Queue(translationRecipe.Id, 1, CancellationToken.None)));
+    Check(queued.All(value => value), "Duplicate translation requests were not idempotent.");
+    Check(await translationWorker.ProcessNext(CancellationToken.None), "Translation was not claimed.");
+    var translated = await translationService.Get(translationRecipe.Id, CancellationToken.None);
+    Check(translated is { Status: "complete", Version: 1 } && translated.Document?.Title == "Картофель" &&
+        translated.Document.Ingredients[0].EstimatedAmount == "2 кг" && fakeOpenRouter.Requests == 1,
+        "Translated recipe was not saved correctly.");
+    await translationService.Queue(translationRecipe.Id, 1, CancellationToken.None);
+    Check(!await translationWorker.ProcessNext(CancellationToken.None) && fakeOpenRouter.Requests == 1,
+        "An existing translation used another request.");
+
+    Check(await store.Edit(translationRecipe.Id, 1, JsonSerializer.Serialize(translationSource, new JsonSerializerOptions(JsonSerializerDefaults.Web)), CancellationToken.None),
+        "Could not edit test recipe.");
+    Check(await translationService.Get(translationRecipe.Id, CancellationToken.None) is null, "An old translation was shown after editing.");
+    await translationService.Queue(translationRecipe.Id, 2, CancellationToken.None);
+    fakeOpenRouter.Status = HttpStatusCode.TooManyRequests;
+    await translationWorker.ProcessNext(CancellationToken.None);
+    Check((await translationService.Get(translationRecipe.Id, CancellationToken.None)) is { Status: "failed", Error: not null },
+        "Quota failure was not visible.");
+    fakeOpenRouter.Status = HttpStatusCode.OK;
+    fakeOpenRouter.Cost = 1;
+    await translationService.Queue(translationRecipe.Id, 2, CancellationToken.None);
+    await translationWorker.ProcessNext(CancellationToken.None);
+    Check((await translationService.Get(translationRecipe.Id, CancellationToken.None)) is { Status: "failed" },
+        "A nonzero reported cost was accepted.");
+    fakeOpenRouter.Cost = 0;
+    fakeOpenRouter.ChangeAmount = true;
+    await translationService.Queue(translationRecipe.Id, 2, CancellationToken.None);
+    await translationWorker.ProcessNext(CancellationToken.None);
+    Check((await translationService.Get(translationRecipe.Id, CancellationToken.None)) is { Status: "failed" },
+        "A translation with a changed amount was accepted.");
+    fakeOpenRouter.ChangeAmount = false;
+    await translationService.Queue(translationRecipe.Id, 2, CancellationToken.None);
+    await store.Initialize(CancellationToken.None);
+    Check((await translationService.Get(translationRecipe.Id, CancellationToken.None)) is { Status: "failed" },
+        "An interrupted translation was not marked retryable.");
+    await translationService.Queue(translationRecipe.Id, 2, CancellationToken.None);
+    fakeOpenRouter.Started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    fakeOpenRouter.Continue = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var inFlight = translationWorker.ProcessNext(CancellationToken.None);
+    await fakeOpenRouter.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    Check(await store.Edit(translationRecipe.Id, 2, JsonSerializer.Serialize(translationSource, new JsonSerializerOptions(JsonSerializerDefaults.Web)), CancellationToken.None),
+        "Could not edit during translation.");
+    fakeOpenRouter.Continue.TrySetResult();
+    await inFlight;
+    Check(await translationService.Get(translationRecipe.Id, CancellationToken.None) is null,
+        "An outdated in-flight translation was shown after editing.");
+    await using var cleanupTranslation = db.CreateCommand("DELETE FROM recipes WHERE id=@id");
+    cleanupTranslation.Parameters.AddWithValue("id", translationRecipe.Id);
+    await cleanupTranslation.ExecuteNonQueryAsync();
+    Console.WriteLine("Russian translation queue, reuse, failures and version checks passed with a fake provider.");
+}
+finally
+{
+    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", previousKey);
+    Environment.SetEnvironmentVariable("OPENROUTER_TRANSLATION_MODEL", previousModel);
+    Environment.SetEnvironmentVariable("OPENROUTER_TRANSLATION_PROVIDER", previousProvider);
+}
+
 var compatibilityId = Guid.NewGuid();
 await using (var legacy = db.CreateCommand("""
     INSERT INTO recipes (id,source_url,status,document,version,audio_consent)
@@ -181,7 +257,7 @@ Check(existing is { Status: "complete", Version: 7, AudioConsent: true } &&
     existing.Document!.Contains("Existing recipe"), "Existing recipe did not survive repeated initialization.");
 await using (var migrationCount = db.CreateCommand("SELECT count(*) FROM schema_migrations"))
 {
-    Check((long)(await migrationCount.ExecuteScalarAsync())! == 5, "Migration history changed after repeated initialization.");
+    Check((long)(await migrationCount.ExecuteScalarAsync())! == 6, "Migration history changed after repeated initialization.");
 }
 var editResults = await Task.WhenAll(Enumerable.Range(0, 5).Select(index =>
     store.Edit(compatibilityId, 7, $$"""{"title":"Concurrent edit {{index}}"}""", CancellationToken.None)));
@@ -578,6 +654,7 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
         builder.Services.AddSingleton<IRecipeSubmissionService>(submissions);
         builder.Services.AddSingleton(activity);
         builder.Services.AddSingleton<LocalTranslation>();
+        builder.Services.AddSingleton(translationService);
         builder.Services.AddSingleton(new AppPaths(Directory.GetCurrentDirectory()));
         await using var testApp = builder.Build();
         testApp.MapRecipes();
@@ -586,6 +663,25 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
         {
             var address = testApp.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
             using var client = new HttpClient { BaseAddress = new Uri(address) };
+            using (var missingConsent = await client.PostAsJsonAsync($"/api/recipes/{job.Id}/russian-translation", new RequestRussianTranslation(1, false)))
+            {
+                Check(missingConsent.StatusCode == HttpStatusCode.BadRequest, "Translation was accepted without consent.");
+            }
+            await store.Complete(job.Id, JsonSerializer.Serialize(translationSource, new JsonSerializerOptions(JsonSerializerDefaults.Web)), CancellationToken.None);
+            using (var absent = await client.GetAsync($"/api/recipes/{job.Id}/russian-translation"))
+            {
+                Check(absent.StatusCode == HttpStatusCode.NoContent, "Missing translation was not reported.");
+            }
+            using (var request = await client.PostAsJsonAsync($"/api/recipes/{job.Id}/russian-translation", new RequestRussianTranslation(1, true)))
+            {
+                Check(request.StatusCode == HttpStatusCode.Accepted, "Translation request was not queued.");
+            }
+            using (var status = await client.GetAsync($"/api/recipes/{job.Id}/russian-translation"))
+            {
+                var result = await status.Content.ReadFromJsonAsync<RussianTranslationResponse>();
+                Check(result?.Status == "queued", "Queued translation status was not returned.");
+            }
+            await store.SetStatus(job.Id, "processing", null, CancellationToken.None);
             const string apiSource = "https://www.instagram.com/reel/ApiBoundary/";
             using (var noConsent = await client.PostAsJsonAsync("/api/recipes", new CreateRecipeRequest(apiSource, false)))
             {
@@ -646,6 +742,7 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_LOCAL_TRANSLATION") == "t
         builder.Services.AddSingleton<IRecipeSubmissionService>(submissions);
         builder.Services.AddSingleton<ProcessingActivity>();
         builder.Services.AddSingleton<LocalTranslation>();
+        builder.Services.AddSingleton(translationService);
         builder.Services.AddSingleton(new AppPaths(Directory.GetCurrentDirectory()));
         await using var testApp = builder.Build();
         testApp.MapRecipes();
@@ -927,6 +1024,7 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
     builder.Services.AddSingleton<IRecipeSubmissionService>(submissions);
     builder.Services.AddSingleton<ProcessingActivity>();
     builder.Services.AddSingleton<LocalTranslation>();
+    builder.Services.AddSingleton(translationService);
     builder.Services.AddSingleton(new AppPaths(Directory.GetCurrentDirectory()));
     await using var testApp = builder.Build();
     testApp.MapRecipes();

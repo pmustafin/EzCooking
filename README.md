@@ -41,6 +41,13 @@ ingredients, quantities and instructions before cooking.
    provider; audio is sent only with separate optional consent. Private or
    blocked reels cannot be downloaded; retry or upload a video instead.
 
+For an optional Russian translation, open a saved recipe and select translation.
+After your consent, its text is sent to OpenRouter and its selected provider in
+one separate free-model request. The result is saved; translation can fail when
+free quota is exhausted. Check translations against the original before cooking.
+Set `OPENROUTER_TRANSLATION_MODEL` in `.env` to choose another explicitly free
+text-capable model, or `OPENROUTER_TRANSLATION_PROVIDER` to restrict the provider.
+
 To stop, press Ctrl+C in the app window, then run `.\stop.ps1`. Your database
 and local media are retained. For later use, start Docker Desktop and run
 `.\start.ps1` again.

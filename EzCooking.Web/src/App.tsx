@@ -8,6 +8,7 @@ type EditableStep = { key: number; text: string; originalText: string; timestamp
 type Document = { title: string; ingredients: Ingredient[]; steps: Step[]; uncertainties: string[]; tags: string[]; cover: string; frames: string[]; video: string; attribution: string | null; model: string; cost: number | null; sourceCaption?: string | null; audioModel?: string | null; audioCost?: number | null; recipeSource?: 'caption' | 'video' | 'edited' | null }
 type Activity = { at: string; message: string }
 type Recipe = { id: string; sourceUrl: string | null; status: string; error: string | null; document: string | null; version: number; createdAt: string; warnings: string[]; activity?: Activity[] | null }
+type Translation = { version: number; status: 'queued' | 'processing' | 'complete' | 'failed'; document: Document | null; error: string | null }
 type PollState = { checkedAt: number | null; unavailable: boolean }
 type Summary = { id: string; title: string; cover: string; tags: string[]; needsReview: boolean }
 type Page<T> = { items: T[]; hasMore: boolean }
@@ -57,6 +58,16 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
+  const [translation, setTranslation] = useState<Translation | null>(null)
+  const [translationLoading, setTranslationLoading] = useState(true)
+  const [translationError, setTranslationError] = useState('')
+  const [confirmTranslation, setConfirmTranslation] = useState(false)
+  const [translationBusy, setTranslationBusy] = useState(false)
+  const [showRussian, setShowRussian] = useState(false)
+  const [translationRefresh, setTranslationRefresh] = useState(0)
+  const showWhenReady = useRef(false)
+  const originalLanguageButton = useRef<HTMLButtonElement>(null)
+  const russianLanguageButton = useRef<HTMLButtonElement>(null)
   const [editVersion, setEditVersion] = useState(0)
   const [title, setTitle] = useState('')
   const [ingredients, setIngredients] = useState<EditableIngredient[]>([])
@@ -65,7 +76,11 @@ function App() {
   const editorFocus = useRef<string | null>(null)
   const [editorNotice, setEditorNotice] = useState('')
   const [tags, setTags] = useState('')
-  const data = selected ? documentOf(selected) : null
+  const original = selected ? documentOf(selected) : null
+  const data = showRussian && translation && translation.version === selected?.version && translation.document ? translation.document : original
+  const translationRecipeId = selected?.id
+  const translationRecipeVersion = selected?.version
+  const translationRecipeStatus = selected?.status
   const activeJobIds = jobs.items.filter(j => ['staging', 'queued', 'processing'].includes(j.status)).map(j => j.id).join(',')
 
   useEffect(() => {
@@ -81,7 +96,7 @@ function App() {
     return () => query.removeEventListener('change', update)
   }, [])
   useEffect(() => {
-    const onHash = () => { setRoute(routeFromHash()); setError(''); setLoading(true); setSelected(null); setVideoError(false); setEditing(false); setRetryId(null); setConsent(false); setAudioConsent(false) }
+    const onHash = () => { setRoute(routeFromHash()); setError(''); setLoading(true); setSelected(null); setVideoError(false); setEditing(false); setRetryId(null); setConsent(false); setAudioConsent(false); setTranslation(null); setTranslationLoading(true); setTranslationError(''); setConfirmTranslation(false); setShowRussian(false); showWhenReady.current = false }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -155,6 +170,44 @@ function App() {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [route.page, route.id])
+  useEffect(() => {
+    if (route.page !== 'detail' || !translationRecipeId || translationRecipeStatus !== 'complete') return
+    let active = true
+    let timer: number | undefined
+    async function checkTranslation() {
+      try {
+        const result = await api<Translation | undefined>(`/api/recipes/${translationRecipeId}/russian-translation`)
+        if (!active) return
+        setTranslation(result ?? null); setTranslationError('')
+        if (result?.status === 'complete' && result.document && showWhenReady.current) {
+          setShowRussian(true); showWhenReady.current = false
+        }
+        if (result?.status === 'failed') showWhenReady.current = false
+        if (result && (result.status === 'queued' || result.status === 'processing')) timer = window.setTimeout(checkTranslation, 2000)
+      } catch (e) {
+        if (active) setTranslationError(`Could not check translation: ${message(e)}`)
+      } finally {
+        if (active) setTranslationLoading(false)
+      }
+    }
+    void checkTranslation()
+    return () => { active = false; if (timer !== undefined) window.clearTimeout(timer) }
+  }, [route.page, translationRecipeId, translationRecipeVersion, translationRecipeStatus, translationRefresh])
+
+  async function requestTranslation() {
+    if (!selected || !confirmTranslation || translationBusy) return
+    const id = selected.id
+    setTranslationBusy(true); setTranslationError('')
+    try {
+      await api(`/api/recipes/${id}/russian-translation`, json({ version: selected.version, consent: true }))
+      if (routeFromHash().id === id) {
+        showWhenReady.current = true
+        setConfirmTranslation(false); setTranslationLoading(true); setTranslationRefresh(value => value + 1)
+        originalLanguageButton.current?.focus()
+      }
+    } catch (e) { if (routeFromHash().id === id) setTranslationError(message(e)) }
+    finally { setTranslationBusy(false) }
+  }
 
   async function moreCollection() {
     setBusy(true)
@@ -244,7 +297,8 @@ function App() {
       })), steps: steps.map(s => ({ text: s.text.trim(),
         timestampSeconds: s.text.trim() === s.originalText.trim() ? s.timestampSeconds : null, evidence: 'edited' })),
       tags: data && tags === data.tags.join(', ') ? data.tags : tags.split(',').map(t => t.trim()).filter(Boolean) }
-      setSelected(await api<Recipe>(`/api/recipes/${selected.id}`, { ...json(body), method: 'PUT' }))
+      const updated = await api<Recipe>(`/api/recipes/${selected.id}`, { ...json(body), method: 'PUT' })
+      setTranslation(null); setTranslationLoading(true); setConfirmTranslation(false); setShowRussian(false); showWhenReady.current = false; setSelected(updated)
       setEditing(false)
     } catch (e) { setError(message(e) === 'Request failed (409).' ? 'This recipe changed while you were editing. Reload before saving.' : message(e)) }
     finally { setBusy(false) }
@@ -354,7 +408,28 @@ function App() {
             <p className="sr-only" role="status">{editorNotice}</p>
             <label>Tags, separated by commas<input value={tags} onChange={e => setTags(e.target.value)} disabled={busy} /></label>
             <div className="actions"><button disabled={busy}>Save changes</button><button type="button" className="secondary" disabled={busy} onClick={() => { setError(''); setEditing(false) }}>Cancel</button></div></form> :
-          <><div className="detail-head"><div><h1>{data.title}</h1>{data.tags.length > 0 && <p className="detail-tags">{data.tags.join(' · ')}</p>}</div><div className="actions"><button className="secondary" disabled={busy} onClick={() => startEdit(data)}>Correct recipe</button><button className="secondary" disabled={busy} onClick={() => remove(selected.id, true)}>Delete recipe</button></div></div>
+          <><div className="detail-head"><div><h1>{data.title}</h1>{data.tags.length > 0 && <p className="detail-tags">{data.tags.join(' · ')}</p>}
+              <div className="translation">
+                <div className="language-control" role="group" aria-label="Recipe language">
+                  <button ref={originalLanguageButton} type="button" aria-pressed={!showRussian} onClick={() => { setShowRussian(false); setConfirmTranslation(false); showWhenReady.current = false }}>Original</button>
+                  <button ref={russianLanguageButton} type="button" lang="ru" aria-pressed={showRussian} aria-expanded={translation?.status === 'complete' ? undefined : confirmTranslation} aria-controls={confirmTranslation ? 'translation-confirm' : undefined} disabled={translationLoading || translationBusy || translation?.status === 'queued' || translation?.status === 'processing' || (!!translationError && !confirmTranslation)}
+                    onClick={() => { if (translation?.status === 'complete' && translation.document) { setShowRussian(true); setConfirmTranslation(false) } else setConfirmTranslation(true) }}>Русский</button>
+                </div>
+                {translationLoading ? <p className="translation-status" role="status">Checking Russian translation…</p> :
+                  translation?.status === 'queued' || translation?.status === 'processing' ? <p className="translation-status" role="status">Russian translation {translation.status === 'queued' ? 'queued' : 'in progress'}. You can leave this page.</p> :
+                  showRussian ? <p className="translation-status" role="status">AI translation. Check the original before cooking.</p> :
+                  translation?.status === 'complete' && translation.document ? <p className="translation-status" role="status">Russian translation available.</p> :
+                  !translation && !translationError && !confirmTranslation ? <p className="translation-status">Russian translation not yet available.</p> : null}
+                {translationError && <div className="translation-message"><p role="alert">{translationError}</p>
+                  {!confirmTranslation && <button type="button" className="secondary" onClick={() => { setTranslationLoading(true); setTranslationRefresh(value => value + 1) }}>Check again</button>}</div>}
+                {translation?.status === 'failed' && !confirmTranslation && !translationError && <div className="translation-message"><p role="alert">Russian translation unavailable: {translation.error ?? 'Translation failed.'}</p><button type="button" className="secondary" onClick={() => setConfirmTranslation(true)}>Retry translation</button></div>}
+                {confirmTranslation && <div className="translation-confirm" id="translation-confirm">
+                  <p><strong>Russian translation is not available yet.</strong></p>
+                  <p>Send this recipe’s text to OpenRouter and its selected provider? This uses a separate free-model request.</p>
+                  <div className="actions"><button type="button" disabled={translationBusy} onClick={requestTranslation}>{translationBusy ? 'Sending…' : translationError ? 'Retry sending' : 'Translate and send'}</button><button type="button" className="secondary" disabled={translationBusy} onClick={() => { setConfirmTranslation(false); setTranslationError(''); russianLanguageButton.current?.focus() }}>Cancel</button></div>
+                </div>}
+              </div>
+            </div><div className="actions"><button className="secondary" disabled={busy} onClick={() => { setShowRussian(false); setConfirmTranslation(false); showWhenReady.current = false; if (original) startEdit(original) }}>Correct recipe</button><button className="secondary" disabled={busy} onClick={() => remove(selected.id, true)}>Delete recipe</button></div></div>
             <div className="recipe-intro">{largeScreen && data.video ? videoPlayer : <img className="cover" src={data.cover} alt={`Frame from the video for ${data.title}`} />}<div className="recipe-context"><h2>About this recipe</h2>
               <p className="evidence">{data.recipeSource === 'caption' ? 'The method comes from the public caption. Ingredients and amounts were organized by AI and may be incomplete or misinterpreted. Check the original before cooking.' : data.recipeSource === 'edited' ? 'This recipe was edited. Check it against the original before cooking.' : 'The photos are video frames. Ingredients and actions are AI inferences, not independently confirmed source details. Check the original before cooking.'}</p>
               {data.attribution && <p className="source-attribution">Source: {data.attribution}</p>}

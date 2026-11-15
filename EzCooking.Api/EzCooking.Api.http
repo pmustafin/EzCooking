@@ -34,6 +34,15 @@ Content-Type: application/json
 
 {"version":1,"language":"ru"}
 
+### Request a Russian translation (consent sends recipe text to OpenRouter)
+POST {{base}}/api/recipes/{{id}}/russian-translation
+Content-Type: application/json
+
+{"version":1,"consent":true}
+
+### Check Russian translation status
+GET {{base}}/api/recipes/{{id}}/russian-translation
+
 ### Permanently delete a failed job or completed recipe and its local media
 DELETE {{base}}/api/recipes/{{id}}
 

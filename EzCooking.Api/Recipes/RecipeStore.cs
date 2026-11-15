@@ -29,7 +29,7 @@ public sealed class RecipeStore(NpgsqlDataSource db) : IRecipeStore
             await tracking.ExecuteNonQueryAsync(ct);
         }
 
-        foreach (var (version, file) in new[] { (1, "001_initial.sql"), (2, "002_audio_consent.sql"), (3, "003_processing_views.sql"), (4, "004_duplicate_uploads.sql"), (5, "005_telegram.sql") })
+        foreach (var (version, file) in new[] { (1, "001_initial.sql"), (2, "002_audio_consent.sql"), (3, "003_processing_views.sql"), (4, "004_duplicate_uploads.sql"), (5, "005_telegram.sql"), (6, "006_recipe_translations.sql") })
         {
             await using var check = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version=@version)", connection, transaction);
             check.Parameters.AddWithValue("version", version);
@@ -51,6 +51,9 @@ public sealed class RecipeStore(NpgsqlDataSource db) : IRecipeStore
             UPDATE recipes SET status='delete_failed', dismissed=false,
                 error='Deletion was interrupted. Try deleting this item again.'
             WHERE status='deleting';
+            UPDATE recipe_translations SET status='failed',
+                error='Translation was interrupted. Retry if you still want it.', updated_at=now()
+            WHERE status IN ('queued','processing');
             """, connection, transaction);
         await cmd.ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);

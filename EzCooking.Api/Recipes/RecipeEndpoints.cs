@@ -68,6 +68,28 @@ public static partial class RecipeEndpoints
             TypedResults.Ok((await store.List(search, ct)).Select(activity.Attach).ToArray())).WithSummary("Search recipes and processing jobs");
         app.MapGet("/api/recipes/{id:guid}", async (Guid id, IRecipeStore store, ProcessingActivity activity, CancellationToken ct) =>
             await store.Get(id, ct) is { } recipe ? Results.Ok(activity.Attach(recipe)) : Results.NotFound()).WithSummary("Get a recipe or processing job");
+        app.MapGet("/api/recipes/{id:guid}/russian-translation", async (Guid id, RussianTranslationService translations, CancellationToken ct) =>
+        {
+            var result = await translations.Get(id, ct);
+            return result is null ? Results.NoContent() : Results.Ok(result);
+        }).WithSummary("Get the Russian translation status for the current recipe version");
+        app.MapPost("/api/recipes/{id:guid}/russian-translation", async (Guid id, RequestRussianTranslation request,
+            RussianTranslationService translations, CancellationToken ct) =>
+        {
+            if (!request.Consent)
+            {
+                return Results.Problem("Consent is required before sending recipe text to OpenRouter.", statusCode: 400);
+            }
+            if (!await translations.Queue(id, request.Version, ct))
+            {
+                return Results.Problem("The recipe is unavailable or has changed. Reload it before translating.", statusCode: 409);
+            }
+
+            return Results.Accepted($"/api/recipes/{id}/russian-translation", new
+            {
+                status = "queued"
+            });
+        }).WithSummary("Queue a consented Russian translation");
         app.MapPost("/api/recipes/{id:guid}/translation", async (Guid id, TranslateRecipeRequest request,
             IRecipeStore store, LocalTranslation translator, CancellationToken ct) =>
         {
