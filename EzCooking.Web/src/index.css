@@ -1,0 +1,5 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; font-weight: 400; color: #161616; background: #ffffff; }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid #e98b32; outline-offset: 3px; }

@@ -1,0 +1,74 @@
+@base = http://127.0.0.1:5187
+@id = 00000000-0000-0000-0000-000000000000
+
+### Search
+GET {{base}}/api/recipes?search=pasta
+
+### Browse a page of saved recipes
+GET {{base}}/api/collection?search=pasta&offset=0
+
+### Filter a collection page by an exact tag
+GET {{base}}/api/collection?search=pasta&tag=weekday&offset=0
+
+### Find tags (up to 30 suggestions)
+GET {{base}}/api/collection/tags?search=week
+
+### Find tags ordered by number of recipes
+GET {{base}}/api/collection/tags?search=week&popular=true
+
+### Show processing or dismissed jobs
+GET {{base}}/api/processing?dismissed=false&offset=0
+
+### Dismiss or restore a failed job without deleting media
+POST {{base}}/api/recipes/{{id}}/dismiss
+Content-Type: application/json
+
+{"dismissed":true}
+
+### Get a recipe or a missing job
+GET {{base}}/api/recipes/{{id}}
+
+### Translate the saved version locally with Ollama (replace ID and version)
+POST {{base}}/api/recipes/{{id}}/translation
+Content-Type: application/json
+
+{"version":1,"language":"ru"}
+
+### Permanently delete a failed job or completed recipe and its local media
+DELETE {{base}}/api/recipes/{{id}}
+
+### Create (set consent only when authorized)
+POST {{base}}/api/recipes
+Content-Type: application/json
+
+{"url":"https://www.instagram.com/reel/EXAMPLE/","consent":false,"audioConsent":false}
+
+### Retry
+POST {{base}}/api/recipes/{{id}}/retry
+Content-Type: application/json
+
+{"consent":false,"audioConsent":false}
+
+### Edit
+PUT {{base}}/api/recipes/{{id}}
+Content-Type: application/json
+
+{"version":1,"title":"Pasta","ingredients":[{"name":"pasta","amount":"200 g"}],"steps":[{"text":"Cook the pasta in boiling water."}],"tags":["pasta"]}
+
+### Media (replace ID and name with a saved recipe's values)
+GET {{base}}/api/media/{{id}}/frame01.jpg
+
+### Upload (replace with a local video and consent when authorized)
+POST {{base}}/api/recipes/upload
+Content-Type: multipart/form-data; boundary=example
+
+--example
+Content-Disposition: form-data; name="consent"
+
+false
+--example
+Content-Disposition: form-data; name="video"; filename="video.mp4"
+Content-Type: video/mp4
+
+< ./video.mp4
+--example--

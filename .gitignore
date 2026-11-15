@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+media/
+.tools/
+.ezcooking.lock
+.vs/
+*.user
