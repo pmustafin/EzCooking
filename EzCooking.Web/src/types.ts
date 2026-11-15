@@ -1,0 +1,11 @@
+export type Ingredient = { name: string; estimatedAmount: string | null }
+export type Step = { text: string; timestampSeconds: number | null }
+export type EditableIngredient = { key: number; name: string; amount: string }
+export type EditableStep = { key: number; text: string; originalText: string; timestampSeconds: number | null }
+export type Document = { title: string; ingredients: Ingredient[]; steps: Step[]; uncertainties: string[]; tags: string[]; cover: string; frames: string[]; video: string; attribution: string | null; model: string; cost: number | null; sourceCaption?: string | null; audioModel?: string | null; audioCost?: number | null; recipeSource?: 'caption' | 'video' | 'edited' | null }
+export type Activity = { at: string; message: string }
+export type Recipe = { id: string; sourceUrl: string | null; status: string; error: string | null; document: string | null; version: number; createdAt: string; warnings: string[]; activity?: Activity[] | null }
+export type Translation = { version: number; status: 'queued' | 'processing' | 'complete' | 'failed'; document: Document | null; error: string | null }
+export type PollState = { checkedAt: number | null; unavailable: boolean }
+export type Summary = { id: string; title: string; cover: string; tags: string[]; needsReview: boolean }
+export type Page<T> = { items: T[]; hasMore: boolean }
