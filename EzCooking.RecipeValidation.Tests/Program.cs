@@ -138,4 +138,21 @@ Check(sourceResult.Recipe is not null && sourceResult.Recipe.Steps[0].Text == ca
     "Caption steps including source times must be retained.");
 Check(RecipeValidator.Validate(sourceDraft, 30).Recipe is null, "Video-generated times remain disallowed.");
 
+var quantifiedCaption = "Beef stroganoff\n300 g beef\n2 tbsp butter";
+var groundedIngredients = new[] { new Ingredient("beef", "300 g"), new Ingredient("butter", "2 tbsp") };
+var videoWarnings = RecipeWarnings.CaptionAmountWarnings(quantifiedCaption, "video", groundedIngredients);
+Check(videoWarnings.Count == 1 && videoWarnings[0].Contains("AI estimates"),
+    "A video recipe must say caption quantities were not used as source amounts.");
+Check(RecipeWarnings.CaptionAmountWarnings(quantifiedCaption, null, groundedIngredients).Count == 1,
+    "Recipes without a source marker must still warn about caption quantities.");
+Check(RecipeWarnings.CaptionAmountWarnings(quantifiedCaption, "edited", groundedIngredients).Count == 0,
+    "Edited recipes must not be told their amounts are AI estimates.");
+var missingAmounts = new[] { new Ingredient("beef", null), new Ingredient("butter", null) };
+Check(RecipeWarnings.CaptionAmountWarnings(quantifiedCaption, "caption", missingAmounts).Single().Contains("were not extracted"),
+    "A caption recipe without amounts must warn that quantities were not extracted.");
+Check(RecipeWarnings.CaptionAmountWarnings(quantifiedCaption, "caption", groundedIngredients).Count == 0,
+    "Amounts matching the caption must not warn.");
+Check(RecipeWarnings.CaptionAmountWarnings("A plain caption with no units.", "video", groundedIngredients).Count == 0,
+    "A caption without quantities must not warn.");
+
 Console.WriteLine("Recipe validation checks passed.");

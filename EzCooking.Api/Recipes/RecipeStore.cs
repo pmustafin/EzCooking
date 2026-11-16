@@ -83,20 +83,8 @@ public sealed class RecipeStore(NpgsqlDataSource db) : IRecipeStore
                         recipe.Ingredients.Select(i => i.Name), recipe.Tags));
                 }
 
-                if (recipe.RecipeSource == "caption" && recipe.SourceCaption is not null &&
-                    CaptionInstructions.HasIngredientQuantities(recipe.SourceCaption) &&
-                    recipe.Ingredients.All(i => i.EstimatedAmount is null))
-                {
-                    warnings.Add("The caption contains quantities that were not extracted; check the original.");
-                }
-
-                if (recipe.RecipeSource == "caption" && recipe.SourceCaption is not null &&
-                    recipe.Ingredients.Any(i => i.EstimatedAmount is not null &&
-                        (!RecipeValidator.IsUsableAmount(i.EstimatedAmount) ||
-                         CaptionInstructions.AssociatedAmount(recipe.SourceCaption, i.Name, i.EstimatedAmount) is null)))
-                {
-                    warnings.Add("Some ingredient amounts could not be matched reliably to the caption; check the original.");
-                }
+                warnings.AddRange(RecipeWarnings.CaptionAmountWarnings(recipe.SourceCaption, recipe.RecipeSource,
+                    recipe.Ingredients));
             }
         }
         return new(row.Id, row.SourceUrl, row.Status, row.Error, document,
