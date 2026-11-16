@@ -11,6 +11,31 @@ import { RecipeDetailPage } from './pages/RecipeDetailPage'
 import { RecipeEditor } from './pages/RecipeEditor'
 import type { Document, EditableIngredient, EditableStep, Page, PollState, Recipe, Summary, Translation } from './types'
 
+type EditorShape = { title: string; ingredients: string[][]; steps: string[]; tags: string }
+
+function countEditorChanges(baseline: EditorShape, current: EditorShape): number {
+  let changes = baseline.title !== current.title ? 1 : 0
+  if (baseline.tags !== current.tags) {
+    changes++
+  }
+
+  const ingredientRows = Math.max(baseline.ingredients.length, current.ingredients.length)
+  for (let index = 0; index < ingredientRows; index++) {
+    if (JSON.stringify(baseline.ingredients[index] ?? null) !== JSON.stringify(current.ingredients[index] ?? null)) {
+      changes++
+    }
+  }
+
+  const stepRows = Math.max(baseline.steps.length, current.steps.length)
+  for (let index = 0; index < stepRows; index++) {
+    if ((baseline.steps[index] ?? null) !== (current.steps[index] ?? null)) {
+      changes++
+    }
+  }
+
+  return changes
+}
+
 function App() {
   const [route, setRoute] = useState(routeFromHash)
   const [search, setSearch] = useState('')
@@ -45,6 +70,7 @@ function App() {
   const [showRussian, setShowRussian] = useState(false)
   const [translationRefresh, setTranslationRefresh] = useState(0)
   const showWhenReady = useRef(false)
+  const previousHash = useRef(window.location.hash)
   const originalLanguageButton = useRef<HTMLButtonElement>(null)
   const russianLanguageButton = useRef<HTMLButtonElement>(null)
   const [editVersion, setEditVersion] = useState(0)
@@ -54,6 +80,7 @@ function App() {
   const nextRowKey = useRef(0)
   const editorFocus = useRef<string | null>(null)
   const [editorNotice, setEditorNotice] = useState('')
+  const [editorBaseline, setEditorBaseline] = useState<EditorShape | null>(null)
   const [tags, setTags] = useState('')
   const original = selected ? documentOf(selected) : null
   const data = showRussian && translation && translation.version === selected?.version && translation.document ? translation.document : original
@@ -61,6 +88,13 @@ function App() {
   const translationRecipeVersion = selected?.version
   const translationRecipeStatus = selected?.status
   const activeJobIds = jobs.items.filter(j => ['staging', 'queued', 'processing'].includes(j.status)).map(j => j.id).join(',')
+  const editorShape: EditorShape = {
+    title: title.trim(),
+    ingredients: ingredients.map(item => [item.name.trim(), item.amount.trim()]),
+    steps: steps.map(item => item.text.trim()),
+    tags: tags.split(',').map(tag => tag.trim()).filter(Boolean).join(', ')
+  }
+  const editorChanges = editorBaseline ? countEditorChanges(editorBaseline, editorShape) : 0
 
   useEffect(() => {
     if (editorFocus.current) {
@@ -75,10 +109,17 @@ function App() {
     return () => query.removeEventListener('change', update)
   }, [])
   useEffect(() => {
-    const onHash = () => { setRoute(routeFromHash()); setError(''); setLoading(true); setSelected(null); setVideoError(false); setEditing(false); setRetryId(null); setConsent(false); setAudioConsent(false); setTranslation(null); setTranslationLoading(true); setTranslationError(''); setConfirmTranslation(false); setShowRussian(false); showWhenReady.current = false }
+    const onHash = () => {
+      if (editing && editorChanges > 0 && !window.confirm('Discard your unsaved corrections?')) {
+        history.replaceState(null, '', previousHash.current)
+        return
+      }
+      previousHash.current = window.location.hash
+      setRoute(routeFromHash()); setError(''); setLoading(true); setSelected(null); setVideoError(false); setEditing(false); setEditorBaseline(null); setRetryId(null); setConsent(false); setAudioConsent(false); setTranslation(null); setTranslationLoading(true); setTranslationError(''); setConfirmTranslation(false); setShowRussian(false); showWhenReady.current = false
+    }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
-  }, [])
+  }, [editing, editorChanges])
   useEffect(() => {
     if (route.page !== 'collection') return
     let active = true
@@ -173,6 +214,13 @@ function App() {
     return () => { active = false; if (timer !== undefined) window.clearTimeout(timer) }
   }, [route.page, translationRecipeId, translationRecipeVersion, translationRecipeStatus, translationRefresh])
 
+  useEffect(() => {
+    if (!editing || editorChanges === 0) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [editing, editorChanges])
+
   async function requestTranslation() {
     if (!selected || !confirmTranslation || translationBusy) return
     const id = selected.id
@@ -253,15 +301,25 @@ function App() {
     finally { setBusy(false) }
   }
   function startEdit(document: Document) {
+    const nextIngredients = document.ingredients.map(i => ({ key: newRowKey(), name: i.name, amount: i.estimatedAmount ?? '' }))
+    const nextSteps = document.steps.map(s => ({ key: newRowKey(), text: s.text, originalText: s.text, timestampSeconds: s.timestampSeconds }))
+    const nextTags = document.tags.join(', ')
     setEditVersion(selected?.version ?? 0)
     setTitle(document.title)
-    setIngredients(document.ingredients.map(i => ({ key: newRowKey(), name: i.name, amount: i.estimatedAmount ?? '' })))
-    setSteps(document.steps.map(s => ({ key: newRowKey(), text: s.text, originalText: s.text, timestampSeconds: s.timestampSeconds })))
-    setTags(document.tags.join(', ')); setEditorNotice(''); setError(''); setEditing(true)
+    setIngredients(nextIngredients)
+    setSteps(nextSteps)
+    setTags(nextTags)
+    setEditorBaseline({
+      title: document.title.trim(),
+      ingredients: nextIngredients.map(i => [i.name.trim(), i.amount.trim()]),
+      steps: nextSteps.map(s => s.text.trim()),
+      tags: nextTags.split(',').map(tag => tag.trim()).filter(Boolean).join(', ')
+    })
+    setEditorNotice(''); setError(''); setEditing(true)
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!selected) return
+    if (!selected || editorChanges === 0) return
     setBusy(true); setError('')
     try {
       const body = { version: editVersion, title, ingredients: ingredients.map(i => ({
@@ -271,11 +329,27 @@ function App() {
       tags: data && tags === data.tags.join(', ') ? data.tags : tags.split(',').map(t => t.trim()).filter(Boolean) }
       const updated = await api<Recipe>(`/api/recipes/${selected.id}`, { ...json(body), method: 'PUT' })
       setTranslation(null); setTranslationLoading(true); setConfirmTranslation(false); setShowRussian(false); showWhenReady.current = false; setSelected(updated)
+      setEditorBaseline(null)
       setEditing(false)
-    } catch (e) { setError(message(e) === 'Request failed (409).' ? 'This recipe changed while you were editing. Reload before saving.' : message(e)) }
+    } catch (e) {
+      if (message(e) === 'Request failed (409).') {
+        setError('This recipe changed elsewhere. Your corrections are still here; save again to overwrite the newer version.')
+        try {
+          setEditVersion((await api<Recipe>(`/api/recipes/${selected.id}`)).version)
+        } catch {
+          setError('This recipe changed elsewhere. Reload the page to see the newer version.')
+        }
+      } else {
+        setError(message(e))
+      }
+    }
     finally { setBusy(false) }
   }
 
+  function discardEdit() {
+    if (editorChanges > 0 && !window.confirm('Discard your unsaved corrections?')) return
+    setError(''); setEditorBaseline(null); setEditing(false)
+  }
   function newRowKey() {
     return nextRowKey.current++
   }
@@ -332,7 +406,7 @@ function App() {
     <header className="top"><a href="#/" className="brand"><span className="brand-mark">e</span> ezcooking</a>
       <nav aria-label="Main navigation"><a href="#/" aria-current={route.page === 'collection' ? 'page' : undefined}>Collection</a><a href="#/processing" aria-current={route.page === 'processing' ? 'page' : undefined}>Processing</a><a className="nav-add" href="#/add" aria-current={route.page === 'add' ? 'page' : undefined}>Add video</a></nav></header>
     <main id="main-content" tabIndex={-1}>
-      {error && <div className="error" role="alert">{error}<button type="button" className="dismiss" onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
+      {error && !editing && <div className="error" role="alert">{error}<button type="button" className="dismiss" onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
       {route.page === 'collection' && <CollectionPage
         search={search} tag={tag} tagInput={tagInput} tagSuggestions={tagSuggestions} tagsLoading={tagsLoading}
         tagError={tagError} loading={loading} failed={collectionFailed} collection={collection} busy={busy}
@@ -353,8 +427,9 @@ function App() {
           editing ? <RecipeEditor
             title={title} setTitle={setTitle} ingredients={ingredients} setIngredients={setIngredients}
             steps={steps} setSteps={setSteps} tags={tags} setTags={setTags} busy={busy}
-            notice={editorNotice} setNotice={setEditorNotice} newRowKey={newRowKey} focusRow={focusRow}
-            onSubmit={save} onCancel={() => { setError(''); setEditing(false) }} /> :
+            changes={editorChanges} original={original} warnings={selected.warnings}
+            error={error} notice={editorNotice} setNotice={setEditorNotice} newRowKey={newRowKey}
+            focusRow={focusRow} onSubmit={save} onDiscard={discardEdit} /> :
           <RecipeDetailPage
             recipe={selected} data={data} largeScreen={largeScreen} videoError={videoError} busy={busy}
             translation={translation} translationLoading={translationLoading} translationError={translationError}
