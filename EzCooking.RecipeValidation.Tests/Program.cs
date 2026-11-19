@@ -68,6 +68,50 @@ var observedActions = draft with
 ]
 };
 Check(RecipeValidator.Validate(observedActions, 30).Recipe is not null, "Common cooking actions were rejected.");
+var burritoBowl = new RecipeDraft("Burrito bowl",
+    [new("avocado", "2", null), new("Monterey Jack cheese", "1/2 cup", null),
+     new("sour cream", "2 tbsp", null), new("romaine lettuce", "2 cups", null),
+     new("pico de gallo", "1/2 cup", null)],
+    [new("Mash avocados to make guacamole.", null, null),
+     new("Arrange guacamole, lettuce, Monterey Jack cheese, sour cream, and pico de gallo in a bowl.", null, null),
+     new("Portion the finished bowls into containers.", null, null)], []);
+Check(RecipeValidator.Validate(burritoBowl, 30).Recipe is not null,
+    "Valid preparation, assembly and portioning steps must not cause missing ingredient errors.");
+var unrecognizedStep = burritoBowl with
+{
+    Steps = [new("Mash avocados to make guacamole.", null, null),
+        new("The cheese, lettuce, sour cream, and pico de gallo.", null, null)]
+};
+var unrecognizedResult = RecipeValidator.Validate(unrecognizedStep, 30);
+Check(unrecognizedResult.Recipe is null && unrecognizedResult.Errors.Count == 1 &&
+      unrecognizedResult.Errors[0].Contains("recognizable cooking action"),
+    "A rejected step must not also cause misleading missing ingredient errors.");
+var sauce = new RecipeDraft("Sauce",
+    [new("mayonnaise", "1/2 cup", null), new("black pepper", null, null),
+     new("honey", "1 tbsp", null), new("garlic powder", "1 tsp", null)],
+    [new("Scoop mayonnaise into a bowl.", null, null),
+     new("Grind black pepper into the bowl.", null, null),
+     new("Whisk the sauce until smooth.", null, null)], []);
+var incompleteSauce = RecipeValidator.Validate(sauce, 30);
+Check(incompleteSauce.Recipe is null && incompleteSauce.Errors.Count == 2 &&
+      incompleteSauce.Errors.Any(error => error.Contains("honey")) &&
+      incompleteSauce.Errors.Any(error => error.Contains("garlic powder")),
+    "Scoop and grind are valid actions, but genuinely unused ingredients must still be reported.");
+var completeSauce = sauce with
+{
+    Steps = [.. sauce.Steps!, new("Add honey and garlic powder to the sauce.", null, null)]
+};
+Check(RecipeValidator.Validate(completeSauce, 30).Recipe is not null,
+    "A method using all sauce ingredients must pass.");
+var rejectedAndMissing = sauce with
+{
+    Steps = [new("The mayonnaise is in a bowl.", null, null)]
+};
+var rejectedAndMissingResult = RecipeValidator.Validate(rejectedAndMissing, 30);
+Check(rejectedAndMissingResult.Errors.Any(error => error.Contains("recognizable cooking action")) &&
+      rejectedAndMissingResult.Errors.Any(error => error.Contains("honey")) &&
+      !rejectedAndMissingResult.Errors.Any(error => error.Contains("use mayonnaise")),
+    "Feedback must report genuinely missing ingredients without blaming an ingredient in a rejected step.");
 var missingIngredient = draft with { Ingredients = [new("lobster", null, "inferred")] };
 Check(RecipeValidator.Validate(missingIngredient, 30).Recipe is null, "Ingredients missing from the method must be rejected.");
 var steak = new RecipeDraft("Steak", [new("steak", "2 pieces (about 250–300 g total)", null),
@@ -90,6 +134,47 @@ Check(RecipeValidator.Validate(unverifiedTime, 30, allowCookingMeasures: true).R
     "User corrections may include cooking times.");
 var unverifiedTemperature = draft with { Ingredients = [new("pasta", null, "inferred")], Steps = [new("Bake pasta at 180°C.", null, "visible")] };
 Check(RecipeValidator.Validate(unverifiedTemperature, 30).Recipe is null, "Unverified temperatures must be rejected.");
+var reviewDraft = new RecipeDraft("Garlic pasta",
+    [new("pasta", "200 g", null), new("garlic", "1 clove", null)],
+    [new("Enrobe the pasta in sauce.", null, null)], []);
+var reviewResult = RecipeValidator.Validate(reviewDraft, 30, allowReview: true, sanitizeModelValues: true);
+Check(reviewResult.Recipe is not null && reviewResult.Errors.Count == 0 &&
+      reviewResult.Warnings.Any(w => w.Contains("cooking action")) &&
+      reviewResult.Warnings.Any(w => w.Contains("garlic")),
+    "Unrecognized actions and unmatched ingredients should produce a reviewable draft.");
+Check(RecipeValidator.Validate(badSteps, 30, allowReview: true, sanitizeModelValues: true).Recipe is null &&
+      RecipeValidator.Validate(draft with { Ingredients = [] }, 30, allowReview: true, sanitizeModelValues: true).Recipe is null,
+    "Numbers-only instructions and empty ingredients must still fail.");
+var invalidModelAmount = RecipeValidator.Validate(negativeAmount, 30, allowReview: true, sanitizeModelValues: true);
+Check(invalidModelAmount.Recipe?.Ingredients[0].EstimatedAmount is null &&
+      invalidModelAmount.Warnings.Any(w => w.Contains("quantities are unknown")),
+    "An invalid model amount must be omitted and marked for review.");
+Check(RecipeValidator.Validate(negativeAmount, 30, allowReview: true).Recipe is null,
+    "Invalid user-entered amounts must not be silently changed.");
+var unsafeMeasures = draft with
+{
+    Ingredients = [new("pasta", "200 g", null)],
+    Steps = [new("Bake pasta at 180°C for 10-15 minutes.", 12, null)]
+};
+var safeReview = RecipeValidator.Validate(unsafeMeasures, 30, allowTimestamps: false,
+    allowReview: true, sanitizeModelValues: true);
+Check(safeReview.Recipe is not null && !safeReview.Recipe.Steps[0].Text.Any(char.IsDigit) &&
+      safeReview.Recipe.Steps[0].TimestampSeconds is null &&
+      safeReview.Warnings.Any(w => w.Contains("unverified cooking time")),
+    "Unverified temperature and time ranges must be omitted and flagged.");
+var savedSafeDraft = new RecipeDraft(safeReview.Recipe!.Title,
+    safeReview.Recipe.Ingredients.Select(i => new IngredientDraft(i.Name, i.EstimatedAmount, null)).ToArray(),
+    safeReview.Recipe.Steps.Select(s => new StepDraft(s.Text, s.TimestampSeconds, null)).ToArray(), []);
+Check(RecipeValidator.Validate(savedSafeDraft, 30, allowCookingMeasures: true, allowReview: true)
+      .Warnings.Any(w => w.Contains("unverified cooking time")),
+    "The warning for omitted measures must survive saving and reloading.");
+Check(RecipeValidator.Validate(unsafeMeasures, 30, allowCookingMeasures: true, allowReview: true)
+      .Recipe!.Steps[0].Text.Contains("180°C"),
+    "Explicit user corrections may retain cooking measures.");
+var abbreviatedTime = unsafeMeasures with { Steps = [new("Cook pasta for 1 1/2 h and 30 sec.", null, null)] };
+Check(!RecipeValidator.Validate(abbreviatedTime, 30, allowReview: true, sanitizeModelValues: true)
+      .Recipe!.Steps[0].Text.Any(char.IsDigit),
+    "Abbreviated unverified cooking times must also be omitted.");
 Check(RecipeValidator.FindTitleTagConflicts("Spicy Chicken Pasta", ["pasta"], ["spicy", "chicken", "pasta"]).Count == 1,
     "A title ingredient repeated in tags must not disappear from the ingredient list.");
 Check(RecipeValidator.FindTitleTagConflicts("Spicy Chicken Pasta", ["chicken", "pasta"], ["spicy", "chicken", "pasta"]).Count == 0,

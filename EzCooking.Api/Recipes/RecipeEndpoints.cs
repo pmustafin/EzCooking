@@ -258,7 +258,7 @@ public static partial class RecipeEndpoints
 
             var old = JsonSerializer.Deserialize<RecipeDocument>(existing.Document, _json)!;
             var validation = RecipeValidator.Validate(new(request.Title, request.Ingredients, request.Steps, []), double.MaxValue,
-                allowCookingMeasures: true, sourceInstructions: old.RecipeSource is "caption" or "edited");
+                allowCookingMeasures: true, sourceInstructions: old.RecipeSource == "caption", allowReview: true);
             if (validation.Recipe is null)
             {
                 return Results.Problem(string.Join(" ", validation.Errors), statusCode: 400);

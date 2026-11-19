@@ -19,7 +19,7 @@ public sealed record ValidatedRecipe(
     IReadOnlyList<Ingredient> Ingredients,
     IReadOnlyList<Step> Steps,
     IReadOnlyList<string> Uncertainties);
-public sealed record ValidationResult(ValidatedRecipe? Recipe, IReadOnlyList<string> Errors);
+public sealed record ValidationResult(ValidatedRecipe? Recipe, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings);
 
 public static partial class RecipeValidator
 {
@@ -31,19 +31,22 @@ public static partial class RecipeValidator
     // These checks do not establish factual accuracy or food safety.
     private const string DefaultUncertainty =
         "Ingredients, quantities, and instructions may be inferred or estimated; verify them against the source.";
+    private const string UnverifiedMeasure = "[unverified time or temperature]";
 
     public static ValidationResult Validate(RecipeDraft? draft, double videoDurationSeconds,
-        bool allowCookingMeasures = false, bool allowTimestamps = true, bool sourceInstructions = false)
+        bool allowCookingMeasures = false, bool allowTimestamps = true, bool sourceInstructions = false,
+        bool allowReview = false, bool sanitizeModelValues = false)
     {
         var errors = new List<string>();
+        var warnings = new List<string>();
         if (draft is null)
         {
-            return new(null, ["No recipe was returned."]);
+            return new(null, ["No recipe was returned."], []);
         }
 
         if (!double.IsFinite(videoDurationSeconds) || videoDurationSeconds <= 0)
         {
-            return new(null, ["The video duration is unavailable or invalid."]);
+            return new(null, ["The video duration is unavailable or invalid."], []);
         }
 
         var title = draft.Title?.Trim();
@@ -70,8 +73,12 @@ public static partial class RecipeValidator
                 }
                 if (!string.IsNullOrEmpty(amount) && !IsUsableAmount(amount))
                 {
-                    errors.Add($"The amount for {name} is not usable.");
-                    continue;
+                    if (!sanitizeModelValues)
+                    {
+                        errors.Add($"The amount for {name} is not usable.");
+                        continue;
+                    }
+                    amount = null;
                 }
                 ingredients.Add(new(name, string.IsNullOrEmpty(amount) ? null : amount));
             }
@@ -88,15 +95,35 @@ public static partial class RecipeValidator
             {
                 var text = item?.Text?.Trim();
                 if (string.IsNullOrWhiteSpace(text) || text.Length is < 12 or > 2000 ||
-                    (!sourceInstructions && !ActionRegex().IsMatch(text)) || !MultipleWordsRegex().IsMatch(text))
+                    !MultipleWordsRegex().IsMatch(text))
                 {
                     errors.Add("A step does not contain a recognizable cooking action.");
                     continue;
                 }
+                if (!sourceInstructions && !ActionRegex().IsMatch(text))
+                {
+                    if (allowReview)
+                    {
+                        warnings.Add("A step may not describe a cooking action; check the original.");
+                    }
+                    else
+                    {
+                        errors.Add("A step does not contain a recognizable cooking action.");
+                        continue;
+                    }
+                }
                 if (!allowCookingMeasures && CookingMeasureRegex().IsMatch(text))
                 {
-                    errors.Add("A cooking time or temperature cannot be verified against the source.");
-                    continue;
+                    if (!sanitizeModelValues)
+                    {
+                        errors.Add("A cooking time or temperature cannot be verified against the source.");
+                        continue;
+                    }
+                    text = CookingMeasureRegex().Replace(text, UnverifiedMeasure);
+                }
+                if (text.Contains(UnverifiedMeasure, StringComparison.Ordinal))
+                {
+                    warnings.Add("An unverified cooking time or temperature was omitted; check the original or a trusted source.");
                 }
                 var timestamp = item?.TimestampSeconds;
                 if (!allowTimestamps || (timestamp is not null &&
@@ -109,7 +136,13 @@ public static partial class RecipeValidator
             }
         }
 
-        if (steps.Count != 0)
+        var usableStepTexts = (draft.Steps is { Count: > 0 and <= 100 } ? draft.Steps : [])
+            .Select(step => step?.Text?.Trim())
+            .OfType<string>()
+            .Where(text => !string.IsNullOrWhiteSpace(text) && text.Length is >= 12 and <= 2000 &&
+                MultipleWordsRegex().IsMatch(text))
+            .ToArray();
+        if (usableStepTexts.Length != 0)
         {
             foreach (var ingredient in ingredients)
             {
@@ -117,18 +150,26 @@ public static partial class RecipeValidator
                     .Select(m => m.Value)
                     .Where(term => term.Length >= 3)
                     .ToArray();
-                if (terms.Length == 0 || !terms.Any(term => steps.Any(step =>
-                    Regex.IsMatch(step.Text, $@"(?<!\p{{L}}){Regex.Escape(term)}\p{{L}}*(?!\p{{L}})",
+                if (terms.Length == 0 || !terms.Any(term => usableStepTexts.Any(text =>
+                    Regex.IsMatch(text, $@"(?<!\p{{L}}){Regex.Escape(term)}\p{{L}}*(?!\p{{L}})",
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))))
                 {
-                    errors.Add($"The instructions do not explain how to use {ingredient.Name}. Mention it explicitly in the relevant cooking step or remove it if unsupported.");
+                    var message = $"The instructions may not explain how to use {ingredient.Name}; check the original.";
+                    if (allowReview)
+                    {
+                        warnings.Add(message);
+                    }
+                    else
+                    {
+                        errors.Add($"The instructions do not explain how to use {ingredient.Name}. Mention it explicitly in the relevant cooking step or remove it if unsupported.");
+                    }
                 }
             }
         }
 
         if (errors.Count != 0)
         {
-            return new(null, errors);
+            return new(null, errors, warnings.Distinct().ToArray());
         }
 
         var uncertainties = (draft.Uncertainties ?? [])
@@ -141,9 +182,13 @@ public static partial class RecipeValidator
         if (ingredients.Any(i => i.EstimatedAmount is null))
         {
             uncertainties.Add("Some ingredient quantities are unknown.");
+            if (allowReview)
+            {
+                warnings.Add("Some ingredient quantities are unknown; check the original.");
+            }
         }
 
-        return new(new(title!, ingredients, steps, uncertainties), []);
+        return new(new(title!, ingredients, steps, uncertainties), [], warnings.Distinct().ToArray());
     }
 
     public static bool HasCookingAction(string text) => ActionRegex().IsMatch(text);
@@ -189,9 +234,9 @@ public static partial class RecipeValidator
     [GeneratedRegex(@"\p{L}{2,}\s+\p{L}{2,}", RegexOptions.IgnoreCase)]
     private static partial Regex MultipleWordsRegex();
 
-    [GeneratedRegex(@"(?<!\d)\d+(?:[.,]\d+)?\s*(?:°\s*[cfсф]|degrees?\b|градус\p{L}*|minutes?\b|mins?\b|hours?\b|hrs?\b|seconds?\b|минут\p{L}*|секунд\p{L}*|час(?:а|ов)?\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![\d.,/])(?:\d+(?:[.,]\d+)?(?:\s+\d+/\d+|/\d+|[½¼¾⅓⅔])?|[½¼¾⅓⅔])(?:\s*(?:-|–|to|до)\s*\d+(?:[.,]\d+)?)?\s*(?:°\s*[cfсф]|[cfсф]\b|degrees?\b|градус\p{L}*|minutes?\b|mins?\b|hours?\b|hrs?\b|h\b|seconds?\b|secs?\b|s\b|мин(?:ут\p{L}*)?\b|сек(?:унд\p{L}*)?\b|час(?:а|ов)?\b|ч\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CookingMeasureRegex();
 
-    [GeneratedRegex(@"\b(?:add|bake|baste|beat|blanch|boil|brown|brush|chop|combine|cook|cover|cut|deglaze|dice|drain|fold|fry|garnish|grate|grill|heat|knead|marinate|melt|mince|mix|peel|place|plate|pour|preheat|reduce|remove|rinse|roast|roll|saut[eé]|sear|season|serve|shred|simmer|slice|spoon|sprinkle|squeeze|stir|strain|toast|top|toss|transfer|warm|whisk|разогре\p{L}*|добав\p{L}*|вар\p{L}*|обжар\p{L}*|жар\p{L}*|нареж\p{L}*|реж\p{L}*|смеш\p{L}*|перемеш\p{L}*|готов\p{L}*|запек\p{L}*|пода\p{L}*|посол\p{L}*|посып\p{L}*|вылож\p{L}*|налей\p{L}*|слей\p{L}*|туш\p{L}*|очист\p{L}*|измельч\p{L}*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\b(?:add|arrange|assemble|bake|baste|beat|blanch|blend|boil|brown|brush|chop|combine|cook|cover|crush|cut|deglaze|dice|dip|drain|drizzle|fill|fold|fry|garnish|grate|grill|grind|heat|knead|layer|marinate|mash|melt|mince|mix|peel|place|plate|portion|pour|preheat|press|reduce|refrigerate|remove|rest|rinse|roast|roll|saut[eé]|scoop|scrape|sear|season|serve|shred|simmer|slice|spoon|spread|sprinkle|squeeze|stir|strain|stuff|toast|top|toss|transfer|warm|whisk|wrap|разогре\p{L}*|добав\p{L}*|вар\p{L}*|обжар\p{L}*|жар\p{L}*|нареж\p{L}*|реж\p{L}*|смеш\p{L}*|перемеш\p{L}*|готов\p{L}*|запек\p{L}*|пода\p{L}*|посол\p{L}*|посып\p{L}*|вылож\p{L}*|налей\p{L}*|слей\p{L}*|туш\p{L}*|очист\p{L}*|измельч\p{L}*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ActionRegex();
 }

@@ -371,7 +371,7 @@ public sealed partial class TelegramWorker : BackgroundService
             var text = item.Status switch
             {
                 "processing" => "Your reel is being processed.",
-                "complete" => "Your recipe is ready. Open EzCooking on your computer to review it and its media.",
+                "complete" => "A recipe draft was saved. Open EzCooking to check it for review warnings and view its media.",
                 _ => $"Your reel needs attention: {item.Error ?? "Processing failed."} Open EzCooking to retry or upload a video."
             };
             await Send(user.Value, $"{text}\n\n{item.Source}", null, ct);

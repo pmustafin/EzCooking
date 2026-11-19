@@ -48,6 +48,9 @@ free quota is exhausted. Check translations against the original before cooking.
 Set `OPENROUTER_TRANSLATION_MODEL` in `.env` to choose another explicitly free
 text-capable model, or `OPENROUTER_TRANSLATION_PROVIDER` to restrict the provider.
 
+Incomplete or uncertain drafts are marked **Needs review**. Check their warnings
+and the original video before cooking or correcting them.
+
 To stop, press Ctrl+C in the app window, then run `.\stop.ps1`. Your database
 and local media are retained. For later use, start Docker Desktop and run
 `.\start.ps1` again.

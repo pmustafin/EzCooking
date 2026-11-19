@@ -222,17 +222,12 @@ public sealed class RecipeWorker(IRecipeStore store, AppPaths paths, IHttpClient
                                 } : i).ToList()
                     };
                 }
-                if (captionSteps is not null && CaptionInstructions.HasIngredientQuantities(source!.Caption!) &&
-                    (modelRecipe.Ingredients is null || modelRecipe.Ingredients.All(i => string.IsNullOrWhiteSpace(i?.Amount))))
-                {
-                    feedback = "The caption contains ingredient quantities, but none were extracted. Copy the available amounts exactly.";
-                    continue;
-                }
                 var steps = captionSteps is null ? modelRecipe.Steps :
                     captionSteps.Select(s => (StepDraft?)new StepDraft(s, null, "caption")).ToList();
                 var validated = RecipeValidator.Validate(new(modelRecipe.Title, modelRecipe.Ingredients, steps,
                     captionSteps is null ? modelRecipe.Uncertainties : []), duration, allowCookingMeasures: captionSteps is not null,
-                    allowTimestamps: false, sourceInstructions: captionSteps is not null);
+                    allowTimestamps: false, sourceInstructions: captionSteps is not null,
+                    allowReview: true, sanitizeModelValues: true);
                 if (validated.Recipe is null)
                 {
                     feedback = string.Join(" ", validated.Errors);

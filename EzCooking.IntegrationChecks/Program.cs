@@ -681,6 +681,41 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
                 var result = await status.Content.ReadFromJsonAsync<RussianTranslationResponse>();
                 Check(result?.Status == "queued", "Queued translation status was not returned.");
             }
+            var reviewJob = await store.Create(null, false, CancellationToken.None);
+            try
+            {
+                await store.SetStatus(reviewJob.Id, "processing", null, CancellationToken.None);
+                await store.Complete(reviewJob.Id, """
+                    {"title":"Pasta","ingredients":[{"name":"pasta","estimatedAmount":"200 g"}],
+                     "steps":[{"text":"Enrobe pasta in sauce.","timestampSeconds":null}],
+                     "uncertainties":[],"tags":[],"cover":"","frames":[],"video":"","model":"",
+                     "recipeSource":"video"}
+                    """, CancellationToken.None);
+                var review = await client.GetFromJsonAsync<RecipeResponse>($"/api/recipes/{reviewJob.Id}");
+                var reviewCollection = await client.GetFromJsonAsync<RecipePage<RecipeSummary>>("/api/collection?search=Pasta");
+                Check(review?.Warnings.Any(w => w.Contains("cooking action")) == true &&
+                      reviewCollection?.Items.Any(item => item.Id == reviewJob.Id && item.NeedsReview) == true,
+                    "Reviewable drafts must retain warnings in detail and collection.");
+                var ingredientEdits = new List<IngredientDraft> { new("pasta", "200 g", "edited") };
+                using var titleEdit = await client.PutAsJsonAsync($"/api/recipes/{reviewJob.Id}", new EditRecipeRequest(
+                    review!.Version, "Pasta bowl", ingredientEdits,
+                    [new("Enrobe pasta in sauce.", null, "edited")], []));
+                var stillReview = await titleEdit.Content.ReadFromJsonAsync<RecipeResponse>();
+                Check(titleEdit.IsSuccessStatusCode && stillReview?.Warnings.Any(w => w.Contains("cooking action")) == true,
+                    "An unrelated edit must not clear an unresolved review warning.");
+                using var fixedEdit = await client.PutAsJsonAsync($"/api/recipes/{reviewJob.Id}", new EditRecipeRequest(
+                    stillReview!.Version, "Pasta bowl", ingredientEdits,
+                    [new("Cook pasta in the sauce.", null, "edited")], []));
+                var corrected = await fixedEdit.Content.ReadFromJsonAsync<RecipeResponse>();
+                Check(fixedEdit.IsSuccessStatusCode && corrected?.Warnings.Count == 0,
+                    "Correcting the method should clear the resolved review warning.");
+            }
+            finally
+            {
+                await using var cleanupReview = db.CreateCommand("DELETE FROM recipes WHERE id=@id");
+                cleanupReview.Parameters.AddWithValue("id", reviewJob.Id);
+                await cleanupReview.ExecuteNonQueryAsync();
+            }
             await store.SetStatus(job.Id, "processing", null, CancellationToken.None);
             const string apiSource = "https://www.instagram.com/reel/ApiBoundary/";
             using (var noConsent = await client.PostAsJsonAsync("/api/recipes", new CreateRecipeRequest(apiSource, false)))
@@ -827,7 +862,7 @@ try
             {"title":"Pasta","ingredients":[{"name":"pasta","estimatedAmount":"3"}],
              "steps":[{"text":"Add 3:1 salt to pasta.","timestampSeconds":null},{"text":"Cook pasta for 10 minutes.","timestampSeconds":null}],
              "uncertainties":[],"tags":[],"cover":"","frames":[],"video":"","model":"",
-             "sourceCaption":"1. Add 3:1 salt to pasta.\n2. Cook pasta for 10 minutes.","recipeSource":"caption"}
+             "sourceCaption":"300 g pasta\n1. Add 3:1 salt to pasta.\n2. Cook pasta for 10 minutes.","recipeSource":"caption"}
             """, CancellationToken.None);
         var savedCaption = await store.Get(captionCreated.Id, CancellationToken.None);
         Check(savedCaption?.Warnings.Any(w => w.Contains("matched reliably")) == true,

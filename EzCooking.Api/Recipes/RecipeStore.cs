@@ -76,8 +76,10 @@ public sealed class RecipeStore(NpgsqlDataSource db) : IRecipeStore
                     recipe.Ingredients.Select(i => new IngredientDraft(i.Name, i.EstimatedAmount, null)).ToArray(),
                     recipe.Steps.Select(s => new StepDraft(s.Text, s.TimestampSeconds, null)).ToArray(),
                     recipe.Uncertainties);
-                warnings.AddRange(RecipeValidator.Validate(draft, double.MaxValue, allowCookingMeasures: true,
-                    sourceInstructions: recipe.RecipeSource is "caption" or "edited").Errors);
+                var validation = RecipeValidator.Validate(draft, double.MaxValue, allowCookingMeasures: true,
+                    sourceInstructions: recipe.RecipeSource == "caption", allowReview: true);
+                warnings.AddRange(validation.Errors);
+                warnings.AddRange(validation.Warnings);
                 if (recipe.RecipeSource != "caption")
                 {
                     warnings.AddRange(RecipeValidator.FindTitleTagConflicts(recipe.Title,
