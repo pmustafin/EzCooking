@@ -90,47 +90,6 @@ public static partial class RecipeEndpoints
                 status = "queued"
             });
         }).WithSummary("Queue a consented Russian translation");
-        app.MapPost("/api/recipes/{id:guid}/translation", async (Guid id, TranslateRecipeRequest request,
-            IRecipeStore store, LocalTranslation translator, CancellationToken ct) =>
-        {
-            if (request.Language is not ("en" or "ru"))
-            {
-                return Results.Problem("Choose English or Russian.", statusCode: 400);
-            }
-
-            var recipe = await store.Get(id, ct);
-            if (recipe?.Document is null || recipe.Status != "complete")
-            {
-                return Results.NotFound();
-            }
-
-            if (recipe.Version != request.Version)
-            {
-                return Results.Problem("The recipe changed. Reload it before translating.", statusCode: 409);
-            }
-
-            var document = JsonSerializer.Deserialize<RecipeDocument>(recipe.Document, _json);
-            if (document is null)
-            {
-                return Results.Problem("The saved recipe could not be read.", statusCode: 500);
-            }
-
-            try
-            {
-                var translated = await translator.Translate(document, recipe.Version, request.Language, ct);
-                var latest = await store.Get(id, ct);
-                if (latest?.Status != "complete" || latest.Version != recipe.Version)
-                {
-                    return Results.Problem("The recipe changed during translation. Reload it before translating.", statusCode: 409);
-                }
-
-                return Results.Ok(translated);
-            }
-            catch (TranslationException ex)
-            {
-                return Results.Problem(ex.Message, statusCode: 503);
-            }
-        }).WithSummary("Translate a saved recipe locally without changing it");
         app.MapPost("/api/recipes", async (CreateRecipeRequest request, IRecipeSubmissionService submissions, CancellationToken ct) =>
         {
             if (!request.Consent)

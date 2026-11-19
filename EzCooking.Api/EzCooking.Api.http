@@ -28,12 +28,6 @@ Content-Type: application/json
 ### Get a recipe or a missing job
 GET {{base}}/api/recipes/{{id}}
 
-### Translate the saved version locally with Ollama (replace ID and version)
-POST {{base}}/api/recipes/{{id}}/translation
-Content-Type: application/json
-
-{"version":1,"language":"ru"}
-
 ### Request a Russian translation (consent sends recipe text to OpenRouter)
 POST {{base}}/api/recipes/{{id}}/russian-translation
 Content-Type: application/json

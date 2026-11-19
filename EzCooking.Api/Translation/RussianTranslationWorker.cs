@@ -97,7 +97,7 @@ public sealed class RussianTranslationWorker(NpgsqlDataSource db, IHttpClientFac
 
     private async Task<RecipeDocument> Translate(RecipeDocument document, CancellationToken ct)
     {
-        var source = LocalTranslation.Texts(document);
+        var source = TranslationText.Texts(document);
         if (source.Sum(item => item.Length) > 7500)
         {
             throw new TranslationException("This recipe is too long to translate.");
@@ -159,7 +159,7 @@ public sealed class RussianTranslationWorker(NpgsqlDataSource db, IHttpClientFac
         }
         var text = choice.GetProperty("message").GetProperty("content").GetString();
         var translated = JsonSerializer.Deserialize<TranslationItems>(text ?? "", _json);
-        if (!LocalTranslation.Valid(source, translated?.Items))
+        if (!TranslationText.Valid(source, translated?.Items))
         {
             throw new TranslationException("The translation was incomplete or changed a number. Retry later.");
         }

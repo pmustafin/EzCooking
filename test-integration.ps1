@@ -6,7 +6,7 @@ $output = Join-Path ([System.IO.Path]::GetTempPath()) "ezcooking-integration-$te
 $database = 'ezcooking_test_disposable'
 $password = [guid]::NewGuid().ToString('N')
 $containerId = $null
-$names = @('EZCOOKING_TEST_DATABASE', 'EZCOOKING_TEST_PASSWORD', 'EZCOOKING_TEST_PORT', 'EZCOOKING_TEST_LOCAL_TRANSLATION')
+$names = @('EZCOOKING_TEST_DATABASE', 'EZCOOKING_TEST_PASSWORD', 'EZCOOKING_TEST_PORT')
 $previous = @{}
 foreach ($name in $names) {
     $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
@@ -55,7 +55,6 @@ try {
     $env:EZCOOKING_TEST_DATABASE = $database
     $env:EZCOOKING_TEST_PASSWORD = $password
     $env:EZCOOKING_TEST_PORT = $Matches[1]
-    $env:EZCOOKING_TEST_LOCAL_TRANSLATION = 'false'
     dotnet (Join-Path $output 'EzCooking.IntegrationChecks.dll')
     if ($LASTEXITCODE -ne 0) {
         throw 'Integration checks failed.'

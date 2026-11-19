@@ -73,47 +73,27 @@ var translationSource = new RecipeDocument("Roasted potatoes",
     [new Ingredient("potatoes", "2 kg"), new Ingredient("salt", null)],
     [new Step("Bake for 20 minutes at 200°C.", null)],
     ["The amount is estimated."], ["dinner"], "", [], "", null, "", null, null, null, null);
-var translationTexts = LocalTranslation.Texts(translationSource);
+var translationTexts = TranslationText.Texts(translationSource);
 Check(translationTexts.SequenceEqual(["Roasted potatoes", "potatoes", "2 kg", "salt",
     "Bake for 20 minutes at 200°C.", "The amount is estimated.", "dinner"]),
     "Translation fields must retain their order and omit unknown amounts.");
-Check(LocalTranslation.Valid(translationTexts, ["Картофель", "картофель", "2 кг", "соль",
+Check(TranslationText.Valid(translationTexts, ["Картофель", "картофель", "2 кг", "соль",
     "Запекайте 20 минут при 200°C.", "Количество приблизительное.", "ужин"]),
     "Valid translations were rejected.");
-Check(LocalTranslation.Valid(translationTexts, ["Картофель", "картофель", "2 кг", "соль",
+Check(TranslationText.Valid(translationTexts, ["Картофель", "картофель", "2 кг", "соль",
     "Запекайте при 200°C в течение 20 минут.", "Количество приблизительное.", "ужин"]),
     "Numbers may appear in a different order in translation.");
-Check(!LocalTranslation.Valid(translationTexts, ["Картофель"]), "Missing translation fields were accepted.");
-Check(!LocalTranslation.Valid(translationTexts, ["Картофель", "картофель", "3 кг", "соль",
+Check(!TranslationText.Valid(translationTexts, ["Картофель"]), "Missing translation fields were accepted.");
+Check(!TranslationText.Valid(translationTexts, ["Картофель", "картофель", "3 кг", "соль",
     "Запекайте 20 минут при 200°C.", "Количество приблизительное.", "ужин"]),
     "A changed amount was accepted.");
-Check(!LocalTranslation.Valid(translationTexts, ["Картофель", "картофель", "2 кг", "соль",
+Check(!TranslationText.Valid(translationTexts, ["Картофель", "картофель", "2 кг", "соль",
     "Запекайте 20 минут при 180°C.", "Количество приблизительное.", "ужин"]),
     "A changed temperature was accepted.");
-Check(!LocalTranslation.Valid(translationTexts, ["Картофель", "", "2 кг", "соль",
+Check(!TranslationText.Valid(translationTexts, ["Картофель", "", "2 кг", "соль",
     "Запекайте 20 минут при 200°C.", "Количество приблизительное.", "ужин"]),
     "An empty translated field was accepted.");
-Console.WriteLine("Local translation structure and number checks passed.");
-if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_LOCAL_TRANSLATION") == "true")
-{
-    var translator = new LocalTranslation();
-    var russian = await translator.Translate(translationSource, 1, "ru", CancellationToken.None);
-    Check(russian.Language == "ru" && russian.Version == 1 && LocalTranslation.Valid(translationTexts, russian.Items),
-        "English-to-Russian local translation failed validation.");
-    var russianSource = translationSource with
-    {
-        Title = "Запечённый картофель",
-        Ingredients = [new Ingredient("картофель", "2 кг"), new Ingredient("соль", null)],
-        Steps = [new Step("Запекайте 20 минут при 200°C.", null)],
-        Uncertainties = ["Количество приблизительное."],
-        Tags = ["ужин"]
-    };
-    var english = await translator.Translate(russianSource, 1, "en", CancellationToken.None);
-    Check(english.Language == "en" && english.Version == 1 &&
-        LocalTranslation.Valid(LocalTranslation.Texts(russianSource), english.Items),
-        "Russian-to-English local translation failed validation.");
-    Console.WriteLine("Synthetic local-model translations passed in both directions. Review remains necessary.");
-}
+Console.WriteLine("Translation payload structure and number checks passed.");
 
 var connection = new NpgsqlConnectionStringBuilder
 {
@@ -653,7 +633,6 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
         builder.Services.AddSingleton<IRecipeStore>(store);
         builder.Services.AddSingleton<IRecipeSubmissionService>(submissions);
         builder.Services.AddSingleton(activity);
-        builder.Services.AddSingleton<LocalTranslation>();
         builder.Services.AddSingleton(translationService);
         builder.Services.AddSingleton(new AppPaths(Directory.GetCurrentDirectory()));
         await using var testApp = builder.Build();
@@ -760,56 +739,6 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
     {
         await using var cleanup = db.CreateCommand("DELETE FROM recipes WHERE id=@id");
         cleanup.Parameters.AddWithValue("id", job.Id);
-        await cleanup.ExecuteNonQueryAsync();
-    }
-}
-if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_LOCAL_TRANSLATION") == "true")
-{
-    var apiJob = await store.Create(null, false, CancellationToken.None);
-    try
-    {
-        await store.SetStatus(apiJob.Id, "processing", null, CancellationToken.None);
-        await store.Complete(apiJob.Id, JsonSerializer.Serialize(translationSource, new JsonSerializerOptions(JsonSerializerDefaults.Web)), CancellationToken.None);
-        var saved = (await store.Get(apiJob.Id, CancellationToken.None))!;
-        var builder = WebApplication.CreateSlimBuilder();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Services.AddSingleton<IRecipeStore>(store);
-        builder.Services.AddSingleton<IRecipeSubmissionService>(submissions);
-        builder.Services.AddSingleton<ProcessingActivity>();
-        builder.Services.AddSingleton<LocalTranslation>();
-        builder.Services.AddSingleton(translationService);
-        builder.Services.AddSingleton(new AppPaths(Directory.GetCurrentDirectory()));
-        await using var testApp = builder.Build();
-        testApp.MapRecipes();
-        await testApp.StartAsync();
-        try
-        {
-            var address = testApp.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
-            using var client = new HttpClient { BaseAddress = new Uri(address), Timeout = TimeSpan.FromMinutes(3) };
-            using var translated = await client.PostAsJsonAsync($"/api/recipes/{apiJob.Id}/translation", new TranslateRecipeRequest(saved.Version, "ru"));
-            Check(translated.StatusCode == HttpStatusCode.OK, "The translation API failed.");
-            var result = await translated.Content.ReadFromJsonAsync<TranslationResponse>();
-            Check(result is not null && LocalTranslation.Valid(translationTexts, result.Items), "The translation API returned invalid output.");
-            var after = await store.Get(apiJob.Id, CancellationToken.None);
-            Check(after?.Version == saved.Version && after.Document == saved.Document, "Translation changed the saved recipe.");
-            using var invalid = await client.PostAsJsonAsync($"/api/recipes/{apiJob.Id}/translation", new TranslateRecipeRequest(saved.Version, "fr"));
-            Check(invalid.StatusCode == HttpStatusCode.BadRequest, "Invalid translation language was accepted.");
-            Check(await store.Edit(apiJob.Id, saved.Version, saved.Document!, CancellationToken.None), "Test edit failed.");
-            using var stale = await client.PostAsJsonAsync($"/api/recipes/{apiJob.Id}/translation", new TranslateRecipeRequest(saved.Version, "ru"));
-            Check(stale.StatusCode == HttpStatusCode.Conflict, "A stale recipe version was translated.");
-            using var missing = await client.PostAsJsonAsync($"/api/recipes/{Guid.NewGuid()}/translation", new TranslateRecipeRequest(1, "ru"));
-            Check(missing.StatusCode == HttpStatusCode.NotFound, "A missing recipe did not return 404.");
-            Console.WriteLine("Translation API and edit protection checks passed.");
-        }
-        finally
-        {
-            await testApp.StopAsync();
-        }
-    }
-    finally
-    {
-        await using var cleanup = db.CreateCommand("DELETE FROM recipes WHERE id=@id");
-        cleanup.Parameters.AddWithValue("id", apiJob.Id);
         await cleanup.ExecuteNonQueryAsync();
     }
 }
@@ -1058,7 +987,6 @@ if (Environment.GetEnvironmentVariable("EZCOOKING_TEST_DATABASE") is not null)
     builder.Services.AddSingleton<IRecipeStore>(store);
     builder.Services.AddSingleton<IRecipeSubmissionService>(submissions);
     builder.Services.AddSingleton<ProcessingActivity>();
-    builder.Services.AddSingleton<LocalTranslation>();
     builder.Services.AddSingleton(translationService);
     builder.Services.AddSingleton(new AppPaths(Directory.GetCurrentDirectory()));
     await using var testApp = builder.Build();

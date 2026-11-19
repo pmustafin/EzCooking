@@ -33,7 +33,6 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
 builder.Services.AddSingleton<IRecipeStore, RecipeStore>();
 builder.Services.AddSingleton<IRecipeSubmissionService, RecipeSubmissionService>();
 builder.Services.AddSingleton<ProcessingActivity>();
-builder.Services.AddSingleton<LocalTranslation>();
 builder.Services.AddSingleton<RussianTranslationService>();
 builder.Services.AddSingleton(new AppPaths(root));
 builder.Services.AddHttpClient();
