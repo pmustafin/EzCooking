@@ -1,4 +1,5 @@
 import type { FormEvent, RefObject } from 'react'
+import { Button } from '../components/Button'
 import { ConsentFields } from '../components/ConsentFields'
 
 type AddPageProps = {
@@ -24,7 +25,7 @@ export function AddPage({ url, hasFile, fileInput, consent, audioConsent, busy, 
       <input id="url" type="url" value={url} onChange={e => onUrl(e.target.value)} placeholder="https://www.instagram.com/reel/…" />
       <div className="or">or upload a video</div><input ref={fileInput} aria-label="Upload a video" type="file" accept="video/*" onChange={e => onFile(e.target.files?.[0] ?? null)} />
       <ConsentFields consent={consent} audioConsent={audioConsent} onConsentChange={onConsent} onAudioConsentChange={onAudioConsent} />
-      <button type="submit" disabled={busy || !consent || (!url && !hasFile)}>{busy ? 'Adding…' : 'Create recipe'}</button>
+      <Button type="submit" disabled={busy || !consent || (!url && !hasFile)}>{busy ? 'Adding…' : 'Create recipe'}</Button>
     </form>
   </section>
 }

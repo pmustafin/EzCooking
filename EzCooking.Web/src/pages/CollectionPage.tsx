@@ -1,4 +1,5 @@
 import type { Page, Summary } from '../types'
+import { Button } from '../components/Button'
 
 type CollectionPageProps = {
   search: string
@@ -28,10 +29,10 @@ export function CollectionPage({ search, tag, tagInput, tagSuggestions, tagsLoad
       <div className="tag-browse" aria-label="Tag suggestions">
         <div className="tag-heading"><p>{tagInput.trim() ? 'Matching tags' : 'Explore by tag'}</p>{tag && <button type="button" className="clear-tag" disabled={busy} onClick={onClearTag}>Clear filter</button>}</div>
         {tagsLoading ? <span role="status">Finding tags…</span> : !tagError && tagSuggestions.length === 0 ? <span>{tagInput.trim() ? 'No matching saved tags.' : 'No saved tags yet.'}</span> :
-          <div className="tag-options">{tagSuggestions.slice(0, 8).map(item => <button type="button" className="secondary tag-option" key={item} disabled={busy} aria-pressed={tag.toLocaleLowerCase() === item.toLocaleLowerCase()} onClick={() => onSelectTag(item)}>{item}</button>)}</div>}
+          <div className="tag-options">{tagSuggestions.slice(0, 8).map(item => <Button variant="secondary" className="tag-option" key={item} disabled={busy} aria-pressed={tag.toLocaleLowerCase() === item.toLocaleLowerCase()} onClick={() => onSelectTag(item)}>{item}</Button>)}</div>}
         <details className="more-tags"><summary>{tagInput.trim() ? 'Edit tag search' : 'Find another tag'}</summary><form className="tag-filter" onSubmit={e => { e.preventDefault(); onApplyTag() }}>
           <label htmlFor="collection-tag">Search tags<input id="collection-tag" type="search" value={tagInput} disabled={busy} onChange={e => onTagInput(e.target.value)} placeholder="Type a tag" maxLength={200} /></label>
-          <button type="submit" className="secondary" disabled={busy || !tagInput.trim()}>Apply tag</button>
+          <Button type="submit" variant="secondary" disabled={busy || !tagInput.trim()}>Apply tag</Button>
         </form>{tagSuggestions.length > 8 && !tagsLoading && <p className="fine">Showing 8 tags. Type more to narrow the list.</p>}</details>
       </div>
       {tagError && <p className="job-error" role="alert">{tagError}</p>}
@@ -41,6 +42,6 @@ export function CollectionPage({ search, tag, tagInput, tagSuggestions, tagsLoad
       <div className="recipe-grid">{collection.items.map(r => <a key={r.id} className="tile" href={`#/recipes/${r.id}`}>
         {r.cover ? <img src={r.cover} alt="" loading="lazy" /> : <div className="placeholder">…</div>}
         <span className="tile-copy"><strong>{r.title}</strong><small>{r.needsReview ? 'Needs review' : r.tags.slice(0, 2).join('  /  ') || 'Saved recipe'}</small></span></a>)}</div>}
-    {!loading && !failed && collection.hasMore && <button className="secondary load-more" disabled={busy} onClick={onMore}>Load more recipes</button>}
+    {!loading && !failed && collection.hasMore && <Button variant="secondary" className="load-more" disabled={busy} onClick={onMore}>Load more recipes</Button>}
   </section>
 }

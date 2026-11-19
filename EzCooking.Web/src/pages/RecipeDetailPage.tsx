@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import type { Document, Recipe, Translation } from '../types'
+import { Button } from '../components/Button'
 import { VideoPlayer } from '../components/VideoPlayer'
 
 type RecipeDetailPageProps = {
@@ -47,15 +48,15 @@ export function RecipeDetailPage({ recipe, data, largeScreen, videoError, busy, 
           translation?.status === 'complete' && translation.document ? <p className="translation-status" role="status">Russian translation available.</p> :
           !translation && !translationError && !confirmTranslation ? <p className="translation-status">Russian translation not yet available.</p> : null}
         {translationError && <div className="translation-message"><p role="alert">{translationError}</p>
-          {!confirmTranslation && <button type="button" className="secondary" onClick={onCheckAgain}>Check again</button>}</div>}
-        {translation?.status === 'failed' && !confirmTranslation && !translationError && <div className="translation-message"><p role="alert">Russian translation unavailable: {translation.error ?? 'Translation failed.'}</p><button type="button" className="secondary" onClick={onRetryTranslation}>Retry translation</button></div>}
+          {!confirmTranslation && <Button variant="secondary" onClick={onCheckAgain}>Check again</Button>}</div>}
+        {translation?.status === 'failed' && !confirmTranslation && !translationError && <div className="translation-message"><p role="alert">Russian translation unavailable: {translation.error ?? 'Translation failed.'}</p><Button variant="secondary" onClick={onRetryTranslation}>Retry translation</Button></div>}
         {confirmTranslation && <div className="translation-confirm" id="translation-confirm">
           <p><strong>Russian translation is not available yet.</strong></p>
           <p>Send this recipe’s text to OpenRouter and its selected provider? This uses a separate free-model request.</p>
-          <div className="actions"><button type="button" disabled={translationBusy} onClick={onRequestTranslation}>{translationBusy ? 'Sending…' : translationError ? 'Retry sending' : 'Translate and send'}</button><button type="button" className="secondary" disabled={translationBusy} onClick={onCancelConfirm}>Cancel</button></div>
+          <div className="actions"><Button disabled={translationBusy} onClick={onRequestTranslation}>{translationBusy ? 'Sending…' : translationError ? 'Retry sending' : 'Translate and send'}</Button><Button variant="secondary" disabled={translationBusy} onClick={onCancelConfirm}>Cancel</Button></div>
         </div>}
       </div>
-    </div><div className="actions"><button className="secondary" disabled={busy} onClick={onEdit}>Correct recipe</button><button className="secondary" disabled={busy} onClick={onDelete}>Delete recipe</button></div></div>
+    </div><div className="actions"><Button variant="secondary" disabled={busy} onClick={onEdit}>Correct recipe</Button><Button variant="secondary" disabled={busy} onClick={onDelete}>Delete recipe</Button></div></div>
     <div className="recipe-intro">{largeScreen && data.video ? videoPlayer : <img className="cover" src={data.cover} alt={`Frame from the video for ${data.title}`} />}<div className="recipe-context"><h2>About this recipe</h2>
       <p className="evidence">{data.recipeSource === 'caption' ? 'The method comes from the public caption. Ingredients and amounts were organized by AI and may be incomplete or misinterpreted. Check the original before cooking.' : data.recipeSource === 'edited' ? 'This recipe was edited. Check it against the original before cooking.' : 'The photos are video frames. Ingredients and actions are AI inferences, not independently confirmed source details. Check the original before cooking.'}</p>
       {data.attribution && <p className="source-attribution">Source: {data.attribution}</p>}

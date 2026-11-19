@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Dispatch, DragEvent, FormEvent, KeyboardEvent, SetStateAction } from 'react'
 import { api } from '../api'
+import { Button } from '../components/Button'
 import type { Document, EditableIngredient, EditableStep } from '../types'
 
 type RecipeEditorProps = {
@@ -349,8 +350,8 @@ export function RecipeEditor({ title, setTitle, ingredients, setIngredients, ste
             <span role="status">{changes === 0 ? 'No changes yet' : `${changes} ${changes === 1 ? 'change' : 'changes'}`}</span>
           </div>
           <div className="actions">
-            <button type="button" className="secondary" disabled={busy} onClick={onDiscard}>{changes === 0 ? 'Back to recipe' : 'Discard'}</button>
-            <button type="submit" disabled={busy || changes === 0}>{busy ? 'Saving…' : 'Save changes'}</button>
+            <Button variant="secondary" disabled={busy} onClick={onDiscard}>{changes === 0 ? 'Back to recipe' : 'Discard'}</Button>
+            <Button type="submit" disabled={busy || changes === 0}>{busy ? 'Saving…' : 'Save changes'}</Button>
           </div>
           {error && <p className="editor-error" role="alert">{error}</p>}
         </div>
