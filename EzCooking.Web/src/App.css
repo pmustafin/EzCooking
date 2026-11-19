@@ -139,6 +139,7 @@ video { width:min(100%,520px); max-height:520px; background:var(--ink); border-r
 .editor-source .caption, .editor-source-mobile .caption { max-height:220px; overflow:auto; margin:0; }
 .editor-source .frames, .editor-source-mobile .frames { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .source-warnings { margin:0; padding-left:18px; line-height:1.55; }
+.source-notes { margin:8px 0 0; padding-left:18px; color:var(--muted); line-height:1.55; font-size:var(--text-sm); }
 .editor-source-mobile { margin:0 0 16px; }
 .editor-source-mobile summary { color:var(--green); font-weight:500; cursor:pointer; padding:12px 0; }
 .editor-source-mobile[open] { max-height:60vh; overflow:auto; }

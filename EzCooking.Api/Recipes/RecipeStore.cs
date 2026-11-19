@@ -10,7 +10,7 @@ namespace EzCooking.Api.Recipes;
 /// <summary>Recipe and processing status returned by the API.</summary>
 public sealed record RecipeResponse(Guid Id, string? SourceUrl, string Status, string? Error,
     string? Document, int Version, DateTimeOffset CreatedAt, IReadOnlyList<string> Warnings, bool AudioConsent,
-    IReadOnlyList<ProcessingEvent>? Activity = null);
+    IReadOnlyList<ProcessingEvent>? Activity = null, IReadOnlyList<string>? Notes = null);
 
 /// <summary>A compact saved recipe for collection browsing.</summary>
 public sealed record RecipeSummary(Guid Id, string Title, string Cover, IReadOnlyList<string> Tags, bool NeedsReview);
@@ -62,6 +62,7 @@ public sealed class RecipeStore(NpgsqlDataSource db) : IRecipeStore
     {
         var document = row.Document;
         var warnings = new List<string>();
+        var notes = new List<string>();
         if (document is not null)
         {
             var recipe = JsonSerializer.Deserialize<RecipeDocument>(document, _json);
@@ -85,10 +86,14 @@ public sealed class RecipeStore(NpgsqlDataSource db) : IRecipeStore
 
                 warnings.AddRange(RecipeWarnings.CaptionAmountWarnings(recipe.SourceCaption, recipe.RecipeSource,
                     recipe.Ingredients));
+                if (RecipeWarnings.CaptionAmountNote(recipe.SourceCaption, recipe.RecipeSource) is { } note)
+                {
+                    notes.Add(note);
+                }
             }
         }
         return new(row.Id, row.SourceUrl, row.Status, row.Error, document,
-            row.Version, row.CreatedAt, warnings, row.AudioConsent);
+            row.Version, row.CreatedAt, warnings, row.AudioConsent, null, notes);
     }
     public async Task<RecipeResponse> Create(string? url, bool audioConsent, CancellationToken ct)
         => await CreateUnique(url, null, audioConsent, ct);
