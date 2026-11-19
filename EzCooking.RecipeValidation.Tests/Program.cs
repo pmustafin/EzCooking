@@ -157,4 +157,17 @@ Check(RecipeWarnings.CaptionAmountWarnings(quantifiedCaption, "caption", grounde
 Check(RecipeWarnings.CaptionAmountWarnings("A plain caption with no units.", "video", groundedIngredients).Count == 0,
     "A caption without quantities must not warn.");
 
+var captionAmounts = "Beef stroganoff\n300 g beef\n2 tbsp butter";
+var labelled = AmountSource.Label(captionAmounts, false,
+    [new Ingredient("beef", "300 g"), new Ingredient("butter", "1 tbsp"), new Ingredient("salt", null)]);
+Check(labelled[0].AmountSource == AmountSource.Caption,
+    "An amount next to its caption ingredient must be labelled as coming from the caption.");
+Check(labelled[1].AmountSource == AmountSource.Estimated,
+    "An amount the caption does not state must be labelled as an estimate.");
+Check(labelled[2].AmountSource is null, "An unknown amount must stay unlabelled.");
+Check(AmountSource.Label(null, false, [new Ingredient("beef", "300 g")])[0].AmountSource == AmountSource.Estimated,
+    "Without a caption every known amount is an estimate.");
+Check(AmountSource.Label(captionAmounts, true, [new Ingredient("beef", "300 g")])[0].AmountSource == AmountSource.Caption,
+    "A caption method supplies its amounts directly.");
+
 Console.WriteLine("Recipe validation checks passed.");

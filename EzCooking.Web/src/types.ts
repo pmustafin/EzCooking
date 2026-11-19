@@ -1,4 +1,4 @@
-export type Ingredient = { name: string; estimatedAmount: string | null }
+export type Ingredient = { name: string; estimatedAmount: string | null; amountSource?: 'caption' | 'estimated' | null }
 export type Step = { text: string; timestampSeconds: number | null }
 export type EditableIngredient = { key: number; name: string; amount: string }
 export type EditableStep = { key: number; text: string; originalText: string; timestampSeconds: number | null }

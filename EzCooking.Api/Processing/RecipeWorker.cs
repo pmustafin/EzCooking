@@ -260,7 +260,8 @@ public sealed class RecipeWorker(IRecipeStore store, AppPaths paths, IHttpClient
             uncertainties = uncertainties.Append("The public source caption was unavailable; the uploaded video was analyzed instead.");
         }
 
-        return new(recipe.Title, recipe.Ingredients, recipe.Steps,
+        return new(recipe.Title, AmountSource.Label(source?.Caption, captionSteps is not null, recipe.Ingredients),
+            recipe.Steps,
             uncertainties.ToArray(),
             (modelRecipe.Tags ?? []).Where(t => !string.IsNullOrWhiteSpace(t) && t.Length <= 60).Take(20).ToArray(),
             urls[cover - 1], urls, $"/api/media/{job.Id}/video.mp4", source?.Attribution, model, totalCost,

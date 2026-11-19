@@ -33,6 +33,9 @@ export function RecipeDetailPage({ recipe, data, largeScreen, videoError, busy, 
   translationError, translationBusy, confirmTranslation, showRussian, originalButtonRef, russianButtonRef,
   onVideoError, onShowOriginal, onSelectRussian, onCheckAgain, onRetryTranslation, onCancelConfirm,
   onRequestTranslation, onEdit, onDelete }: RecipeDetailPageProps) {
+  const isEstimated = (ingredient: Document['ingredients'][number]) => ingredient.amountSource
+    ? ingredient.amountSource === 'estimated'
+    : data.recipeSource !== 'caption' && data.recipeSource !== 'edited'
   const videoPlayer = <VideoPlayer video={data.video} cover={data.cover} title={data.title} sourceUrl={recipe.sourceUrl} error={videoError} onError={onVideoError} />
 
   return <>
@@ -65,7 +68,7 @@ export function RecipeDetailPage({ recipe, data, largeScreen, videoError, busy, 
       {recipe.notes && recipe.notes.length > 0 && <ul className="source-notes">{recipe.notes.map((note, index) => <li key={index}>{note}</li>)}</ul>}
     </div></div>
     {recipe.warnings.length > 0 && <div className="error recipe-warning"><div><strong className="recipe-warning-title">Needs review</strong><ul>{recipe.warnings.map((w, n) => <li key={n}>{w}</li>)}</ul><p>Check the original or correct the recipe.</p></div></div>}
-    <div className="recipe-body"><section className="ingredients-section"><h2>Ingredients</h2><p className="fine ingredient-note">{data.recipeSource === 'caption' ? 'Amounts were extracted from the caption; verify each ingredient and amount against the original.' : data.recipeSource === 'edited' ? 'Amounts may include user edits and unverified AI suggestions.' : 'Amounts marked ~ are estimates, not the creator’s exact quantities.'}</p><ul className="ingredient-list">{data.ingredients.map((i, n) => <li key={n}><span>{i.name}</span><span>{i.estimatedAmount ? data.recipeSource === 'caption' || data.recipeSource === 'edited' ? i.estimatedAmount : `~ ${i.estimatedAmount}` : 'Amount unknown'}</span></li>)}</ul></section>
+    <div className="recipe-body"><section className="ingredients-section"><h2>Ingredients</h2><p className="fine ingredient-note">{data.recipeSource === 'caption' ? 'Amounts were extracted from the caption; verify each ingredient and amount against the original.' : data.recipeSource === 'edited' ? 'Amounts may include user edits and unverified AI suggestions.' : 'Amounts marked ~ are estimates. Unmarked amounts come from the public caption.'}</p><ul className="ingredient-list">{data.ingredients.map((i, n) => <li key={n}><span>{i.name}</span><span>{i.estimatedAmount ? isEstimated(i) ? `~ ${i.estimatedAmount}` : i.estimatedAmount : 'Amount unknown'}</span></li>)}</ul></section>
       <section className="method-section"><h2>Method</h2><ol className="method">{data.steps.map((s, n) => <li key={n}>{s.text}</li>)}</ol><div className="uncertainty"><h2>Before you cook</h2>{data.uncertainties.length > 0 && <ul>{data.uncertainties.map((u, n) => <li key={n}>{u}</li>)}</ul>}<p>Check cooking temperatures and food handling against a trusted source.</p></div></section></div>
     <section className="recipe-source"><h2>{largeScreen && data.video ? 'Original source' : 'Original video'}</h2><div className="source-layout">{(!largeScreen || !data.video) && videoPlayer}<div><p>Review the video alongside the recipe.</p>{recipe.sourceUrl && <p><a href={recipe.sourceUrl} target="_blank" rel="noreferrer">Open the original Instagram reel</a></p>}{data.attribution && <p className="fine">Source: {data.attribution}</p>}</div></div>
       {data.sourceCaption && <p className="fine caption"><strong>Public caption:</strong> {data.sourceCaption}</p>}

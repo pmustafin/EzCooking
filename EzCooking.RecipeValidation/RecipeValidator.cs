@@ -12,7 +12,7 @@ public sealed record RecipeDraft(
     IReadOnlyList<StepDraft?>? Steps,
     IReadOnlyList<string?>? Uncertainties);
 
-public sealed record Ingredient(string Name, string? EstimatedAmount);
+public sealed record Ingredient(string Name, string? EstimatedAmount, string? AmountSource = null);
 public sealed record Step(string Text, double? TimestampSeconds);
 public sealed record ValidatedRecipe(
     string Title,
