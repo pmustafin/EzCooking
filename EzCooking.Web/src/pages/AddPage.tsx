@@ -19,7 +19,7 @@ type AddPageProps = {
 export function AddPage({ url, hasFile, fileInput, consent, audioConsent, busy, onUrl, onFile, onConsent,
   onAudioConsent, onCreate }: AddPageProps) {
   return <section className="narrow page">
-    <p className="intro-note">From video to cookbook</p><h1>Add a cooking video</h1><p>Paste a public reel link or upload a video you can use.</p>
+    <h1>Add a cooking video</h1><p>Paste a public reel link or upload a video you can use.</p>
     <form className="capture" onSubmit={onCreate}>
       <label htmlFor="url">Instagram reel link <small>(optional with upload)</small></label>
       <input id="url" type="url" value={url} onChange={e => onUrl(e.target.value)} placeholder="https://www.instagram.com/reel/…" />

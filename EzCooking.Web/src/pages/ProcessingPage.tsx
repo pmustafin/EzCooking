@@ -26,7 +26,7 @@ type ProcessingPageProps = {
 export function ProcessingPage({ jobs, pollStates, showDismissed, retryId, consent, audioConsent, busy, loading,
   onRefresh, onShowDismissed, onMore, onStartRetry, onCancelRetry, onRetry, onDismiss, onDelete, onConsent, onAudioConsent }: ProcessingPageProps) {
   return <section className="narrow page">
-    <p className="intro-note">Your videos</p><h1>Processing</h1><p>Track videos being prepared and resolve any that need attention. Refresh to see new videos sent from Telegram.</p>
+    <h1>Processing</h1><p>Track videos being prepared and resolve any that need attention. Refresh to see new videos sent from Telegram.</p>
     <div className="processing-toolbar"><Button variant="secondary" disabled={busy || loading} onClick={onRefresh}>{busy ? 'Please wait…' : 'Refresh videos'}</Button><span>Refresh shows the first page.</span></div>
     <div className="tabs">
       <Button variant={showDismissed ? 'secondary' : 'primary'} disabled={busy} onClick={() => onShowDismissed(false)}>Current</Button>
@@ -34,7 +34,7 @@ export function ProcessingPage({ jobs, pollStates, showDismissed, retryId, conse
     </div>
     {loading ? <p role="status">Loading videos…</p> : jobs.items.length === 0 ? <p className="empty">{showDismissed ? 'No dismissed videos.' : <>No videos need attention. <a href="#/add">Add a video</a> or share a reel with your paired Telegram bot.</>}</p> :
       <div className="job-list">{jobs.items.map(job => <article className={`job${job.status === 'processing' ? ' job-processing' : ''}${job.status === 'processing' && !pollStates[job.id]?.unavailable ? ' job-live' : ''}`} key={job.id}>
-        <div className="job-head"><strong aria-live="polite">{job.status === 'complete' ? 'Recipe ready' : job.status === 'delete_failed' ? 'Deletion needs attention' : job.status === 'deleting' ? 'Deleting' : job.status === 'failed' ? 'Needs attention' : job.status === 'processing' ? 'Preparing recipe' : 'Waiting to process'}</strong><span>{new Date(job.createdAt).toLocaleString()}</span></div>
+        <div className="job-head"><strong aria-live="polite">{job.status === 'complete' ? job.warnings.length > 0 ? 'Recipe needs review' : 'Recipe ready' : job.status === 'delete_failed' ? 'Deletion needs attention' : job.status === 'deleting' ? 'Deleting' : job.status === 'failed' ? 'Needs attention' : job.status === 'processing' ? 'Preparing recipe' : 'Waiting to process'}</strong><span>{new Date(job.createdAt).toLocaleString()}</span></div>
         {job.sourceUrl ? <a className="job-source" href={job.sourceUrl} target="_blank" rel="noreferrer">{job.sourceUrl}</a> : <p>Uploaded video</p>}
         {['staging', 'queued', 'processing'].includes(job.status) && <div className="job-activity">
           <p className="activity-current" role="status">{job.status === 'staging' ? 'Preparing the upload.' : job.status === 'queued' ? 'In the queue. Videos are processed one at a time.' : job.activity?.at(-1)?.message ?? 'Waiting for the first activity update.'}</p>
