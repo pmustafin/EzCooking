@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import type { Document, Recipe, Translation } from '../types'
 import { Button } from '../components/Button'
+import { Pill } from '../components/Pill'
 import { VideoPlayer } from '../components/VideoPlayer'
 
 type RecipeDetailPageProps = {
@@ -35,7 +36,7 @@ export function RecipeDetailPage({ recipe, data, largeScreen, videoError, busy, 
   const videoPlayer = <VideoPlayer video={data.video} cover={data.cover} title={data.title} sourceUrl={recipe.sourceUrl} error={videoError} onError={onVideoError} />
 
   return <>
-    <div className="detail-head"><div><h1>{data.title}</h1>{data.tags.length > 0 && <p className="detail-tags">{data.tags.map(tag => <span className="tag-pill" key={tag}>{tag}</span>)}</p>}
+    <div className="detail-head"><div><h1>{data.title}</h1>{data.tags.length > 0 && <p className="detail-tags">{data.tags.map(tag => <Pill key={tag}>{tag}</Pill>)}</p>}
       <div className="translation">
         <div className="language-control" role="group" aria-label="Recipe language">
           <button ref={originalButtonRef} type="button" aria-pressed={!showRussian} onClick={onShowOriginal}>Original</button>

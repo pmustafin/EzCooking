@@ -1,5 +1,6 @@
 import type { Page, Summary } from '../types'
 import { Button } from '../components/Button'
+import { Pill } from '../components/Pill'
 
 type CollectionPageProps = {
   search: string
@@ -29,7 +30,7 @@ export function CollectionPage({ search, tag, tagInput, tagSuggestions, tagsLoad
       <div className="tag-browse" aria-label="Tag suggestions">
         <div className="tag-heading"><p>{tagInput.trim() ? 'Matching tags' : 'Explore by tag'}</p>{tag && <button type="button" className="clear-tag" disabled={busy} onClick={onClearTag}>Clear filter</button>}</div>
         {tagsLoading ? <span role="status">Finding tags…</span> : !tagError && tagSuggestions.length === 0 ? <span>{tagInput.trim() ? 'No matching saved tags.' : 'No saved tags yet.'}</span> :
-          <div className="tag-options">{tagSuggestions.slice(0, 8).map(item => <Button variant="secondary" className="tag-option" key={item} disabled={busy} aria-pressed={tag.toLocaleLowerCase() === item.toLocaleLowerCase()} onClick={() => onSelectTag(item)}>{item}</Button>)}</div>}
+          <div className="tag-options">{tagSuggestions.slice(0, 8).map(item => <Pill key={item} onClick={() => onSelectTag(item)} pressed={tag.toLocaleLowerCase() === item.toLocaleLowerCase()} disabled={busy}>{item}</Pill>)}</div>}
         <details className="more-tags"><summary>{tagInput.trim() ? 'Edit tag search' : 'Find another tag'}</summary><form className="tag-filter" onSubmit={e => { e.preventDefault(); onApplyTag() }}>
           <label htmlFor="collection-tag">Search tags<input id="collection-tag" type="search" value={tagInput} disabled={busy} onChange={e => onTagInput(e.target.value)} placeholder="Type a tag" maxLength={200} /></label>
           <Button type="submit" variant="secondary" disabled={busy || !tagInput.trim()}>Apply tag</Button>

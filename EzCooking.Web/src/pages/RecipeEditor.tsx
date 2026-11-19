@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Dispatch, DragEvent, FormEvent, KeyboardEvent, SetStateAction } from 'react'
 import { api } from '../api'
 import { Button } from '../components/Button'
+import { Pill } from '../components/Pill'
 import type { Document, EditableIngredient, EditableStep } from '../types'
 
 type RecipeEditorProps = {
@@ -399,7 +400,7 @@ export function RecipeEditor({ title, setTitle, ingredients, setIngredients, ste
 
         <fieldset className="edit-group"><legend>Tags</legend><p className="fine">Press Enter or comma to add a tag. Tags help you find the recipe later.</p>
           <div className="tag-editor">
-            {tagList.map(tag => <span className="tag-chip" key={tag}>{tag}<button type="button" disabled={busy} aria-label={`Remove tag ${tag}`} onClick={() => removeTag(tag)}>×</button></span>)}
+            {tagList.map(tag => <Pill key={tag} onRemove={() => removeTag(tag)} removeLabel={`Remove tag ${tag}`} disabled={busy}>{tag}</Pill>)}
             <input list="editor-tag-options" aria-label="Add a tag" value={tagDraft} disabled={busy} placeholder={tagList.length === 0 ? 'dinner, spicy…' : 'add a tag'}
               onChange={event => setTagDraft(event.target.value)}
               onKeyDown={event => {
