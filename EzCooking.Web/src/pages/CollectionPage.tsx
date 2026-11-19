@@ -24,7 +24,7 @@ type CollectionPageProps = {
 export function CollectionPage({ search, tag, tagInput, tagSuggestions, tagsLoading, tagError, loading, failed,
   collection, busy, onSearch, onSelectTag, onClearTag, onTagInput, onApplyTag, onMore }: CollectionPageProps) {
   return <section className="collection">
-    <div className="collection-heading"><div><h1>Your recipes</h1><p>A little inspiration for your next meal.</p></div><a className="collection-add" href="#/add"><span aria-hidden="true">+</span> Add a video</a></div>
+    <div className="collection-heading"><div><h1>Your recipes</h1><p>A little inspiration for your next meal.</p></div></div>
     <div className="collection-controls">
       <label className="search"><span>Search recipes</span><span className="search-field"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4 4"/></svg><input type="search" value={search} disabled={busy} onChange={e => onSearch(e.target.value)} placeholder="Search by dish, ingredient or tag" maxLength={200} /></span></label>
       <div className="tag-browse" aria-label="Tag suggestions">
