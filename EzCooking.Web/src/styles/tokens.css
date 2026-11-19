@@ -1,0 +1,74 @@
+/* Design tokens: one place for colour, radius, type and spacing.
+   Rules use these variables; no component should hold a raw colour. */
+:root {
+  /* surface and text */
+  --surface: #ffffff;
+  --surface-layer: #f4f4f4;
+  --surface-muted: #e5ebe6;
+  --text: #161616;
+  --text-muted: #525252;
+
+  /* borders */
+  --divider: #e0e0e0;
+  --line-strong: #c6c6c6;
+  --line-control: #8d8d8d;
+  --line-dashed: #b0bbb4;
+
+  /* brand */
+  --brand: #245541;
+  --brand-tint: #e8f0eb;
+  --brand-wash: #edf3ee;
+  --brand-glow-soft: rgb(36 85 65 / 6.3%);
+  --brand-glow: rgb(36 85 65 / 18.8%);
+
+  /* feedback */
+  --danger: #7e3a1c;
+  --danger-border: #a64c27;
+  --danger-line: #a34a24;
+  --danger-surface: #fff1e8;
+
+  /* interaction */
+  --focus: #0f62fe;
+
+  /* radii */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --radius-brand: 11px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+
+  /* type scale */
+  --text-xs: .8125rem;
+  --text-sm: .875rem;
+  --text-base: .9375rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.375rem;
+  --text-3xl: 1.5rem;
+  --display-lg: clamp(1.875rem, 2.8vw, 2.75rem);
+  --display-hero: clamp(2.4rem, 4vw, 3.75rem);
+
+  /* spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+
+  /* controls */
+  --control-height: 48px;
+  --tap-target: 44px;
+
+  /* legacy names still referenced while the rules migrate */
+  --cds-layer-01: var(--surface-layer);
+  --ink: var(--text);
+  --paper: var(--surface);
+  --green: var(--brand);
+  --muted: var(--text-muted);
+  --line: var(--line-strong);
+}
