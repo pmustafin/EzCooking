@@ -152,6 +152,26 @@ function App() {
     return () => { active = false }
   }, [route.page, showDismissed])
   useEffect(() => {
+    if (route.page !== 'processing' || showDismissed) return
+    let active = true
+    async function checkForNewJobs() {
+      if (document.hidden || busy) return
+      try {
+        const page = await api<Page<Recipe>>('/api/processing?dismissed=false&offset=0')
+        if (!active) return
+        setJobs(old => {
+          const known = new Set(old.items.map(item => item.id))
+          const fresh = page.items.filter(item => !known.has(item.id))
+          return fresh.length === 0 ? old : { items: [...fresh, ...old.items], hasMore: old.hasMore }
+        })
+      } catch {
+        // Keep the current list; the next tick tries again.
+      }
+    }
+    const timer = window.setInterval(checkForNewJobs, 5000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [route.page, showDismissed, busy])
+  useEffect(() => {
     if (route.page !== 'processing' || showDismissed || !activeJobIds) return
     let active = true
     let timer: number
